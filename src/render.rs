@@ -167,8 +167,8 @@ impl Renderer {
         // -----------------------------------------------------------------------------------
 
         // TODO: currently done inline when creating framebuffers using swapchain_images
-        //       should use iterator and create right away image views as we will never need
-        //       raw images.
+        //       should use iterator and create right away image views as we will never
+        //       need raw images.
 
         // -----------------------------------------------------------------------------------
         // create render pass
@@ -215,8 +215,9 @@ impl Renderer {
         // create command pool
         // -----------------------------------------------------------------------------------
 
-        // TODO: this is currently handled automatically by Vulkano when creating command buffers.
-        //       It will request the default command pool from the provided device and queue family.
+        // TODO: this is currently handled automatically by Vulkano when creating
+        //       command buffers. It will request the default command pool from
+        //       the provided device and queue family.
         //       Ref: AutoCommandBufferBuilder::primary().
 
         // -----------------------------------------------------------------------------------
@@ -330,7 +331,8 @@ impl Renderer {
         }
 
         // wait for the fence related to this image to finish
-        // normally this would be the oldest fence, that most likely have already finished
+        // normally this would be the oldest fence, that most likely have already
+        // finished
         if let Some(image_fence) = &self.fences[image_i] {
             image_fence.wait(None).unwrap();
         }
@@ -512,7 +514,8 @@ pub fn create_command_buffers(
             let mut cbbuilder = AutoCommandBufferBuilder::primary(
                 device.clone(),
                 queue.family(),
-                CommandBufferUsage::MultipleSubmit, // don't forget to write the correct buffer usage
+                // don't forget to write the correct buffer usage
+                CommandBufferUsage::MultipleSubmit,
             )
             .unwrap();
 
