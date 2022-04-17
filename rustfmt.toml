@@ -1,4 +1,7 @@
+# stable
+
 # unstable. requires nightly rustfmt:
 #   $ rustup default nightly-x86_64-pc-windows-msvc
 #   $ cargo +nightly fmt
 group_imports = "StdExternalCrate"
+wrap_comments = true
