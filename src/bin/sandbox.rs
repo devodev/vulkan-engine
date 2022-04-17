@@ -14,6 +14,7 @@ fn main() {
     // engine takes ownership of thread and will call std::process::exit for us
     EngineBuilder::new()
         .with_window_size(Size::Logical(LogicalSize::new(1024.0, 768.0)))
+        .with_window_title("Sandbox (Vulkan Engine)".to_owned())
         .build()
         .run()
         .expect("failed to run engine");
