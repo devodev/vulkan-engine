@@ -499,6 +499,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21163e139fa306126e6eedaf49ecdb4588f939600f0b1e770f4205ee4b7fa868"
 
 [[package]]
+name = "gameloop"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3baae1c5c5ea69f26b996f7e091ce48658be76c8de2bc648f1a8b8c65b3cc294"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1359,6 +1368,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "env_logger",
+ "gameloop",
  "image",
  "log",
  "vulkano",

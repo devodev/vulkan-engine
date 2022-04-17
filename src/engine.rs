@@ -1,6 +1,7 @@
 use log::debug;
 use std::error::Error;
 
+use gameloop::GameLoop;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -33,6 +34,11 @@ impl Engine {
             .take()
             .ok_or("Couldnt take renderer. Did you call self.init_renderer?")?;
 
+        // run gameloop at 20 tps with a max frameskip of 5
+        let tps = 20;
+        let max_frameskip = 5;
+        let game_loop = GameLoop::new(tps, max_frameskip)?;
+
         debug!("start event loop");
         event_loop.run(move |event, _, control_flow| match event {
             Event::WindowEvent {
@@ -50,7 +56,16 @@ impl Engine {
             Event::MainEventsCleared => {
                 // NOTE: the MainEventsCleared event "will be emitted when all input events
                 //       have been processed and redraw processing is about to begin".
-                renderer.render(&mut window_resized, &mut recreate_swapchain);
+                for action in game_loop.actions() {
+                    match action {
+                        gameloop::FrameAction::Tick => {
+                            // todo!("update state")
+                        }
+                        gameloop::FrameAction::Render { interpolation: _ } => {
+                            renderer.render(&mut window_resized, &mut recreate_swapchain)
+                        }
+                    }
+                }
             }
             _ => (),
         });
