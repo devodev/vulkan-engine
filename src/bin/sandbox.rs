@@ -1,6 +1,7 @@
-use log::LevelFilter;
+use core::EngineBuilder;
 
-use core::Engine;
+use log::LevelFilter;
+use winit::dpi::{LogicalSize, Size};
 
 fn main() {
     // initialize logger
@@ -11,5 +12,9 @@ fn main() {
 
     // create and run engine
     // engine takes ownership of thread and will call std::process::exit for us
-    Engine::new().run().unwrap();
+    EngineBuilder::new()
+        .with_window_size(Size::Logical(LogicalSize::new(1024.0, 768.0)))
+        .build()
+        .run()
+        .expect("failed to run engine");
 }

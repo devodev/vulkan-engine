@@ -1,8 +1,9 @@
-use log::debug;
 use std::error::Error;
 
 use gameloop::GameLoop;
+use log::debug;
 use winit::{
+    dpi::{LogicalSize, Size},
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
@@ -12,13 +13,48 @@ use crate::render::Renderer;
 
 type MyResult<T> = Result<T, Box<dyn Error>>;
 
+#[derive(Debug, Clone)]
+pub struct EngineBuilder {
+    window_size: Option<Size>,
+}
+
+impl EngineBuilder {
+    pub fn new() -> Self {
+        Self { window_size: None }
+    }
+
+    pub fn with_window_size(mut self, s: Size) -> Self {
+        self.window_size = Some(s);
+        self
+    }
+
+    pub fn build(&self) -> Engine {
+        let mut wb = WindowBuilder::new();
+        wb = wb.with_min_inner_size(Size::Logical(LogicalSize::new(320.0, 240.0)));
+        if let Some(window_size) = self.window_size {
+            wb = wb.with_inner_size(window_size);
+        }
+        Engine::new(wb)
+    }
+}
+
+impl Default for EngineBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct Engine {
+    window_builder: Option<WindowBuilder>,
     renderer: Option<Renderer>,
 }
 
 impl Engine {
-    pub fn new() -> Self {
-        Engine { renderer: None }
+    fn new(wb: WindowBuilder) -> Self {
+        Engine {
+            window_builder: Some(wb),
+            renderer: None,
+        }
     }
 
     pub fn run(&mut self) -> MyResult<()> {
@@ -42,8 +78,8 @@ impl Engine {
         let game_loop = GameLoop::new(tps, max_frameskip)?;
 
         debug!("start event loop");
-        // event_loop.run() hijacks the main thread and calls std::process::exit when done
-        // anything that has not been moved in the closure will not be dropped
+        // event_loop.run() hijacks the main thread and calls std::process::exit when
+        // done anything that has not been moved in the closure will not be dropped
         event_loop.run(move |event, _, control_flow| match event {
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
@@ -78,7 +114,11 @@ impl Engine {
     fn init_window(&mut self) -> MyResult<(EventLoop<()>, Window)> {
         debug!("init_window");
         let event_loop = EventLoop::new();
-        let window = WindowBuilder::new().build(&event_loop)?;
+        let window = self
+            .window_builder
+            .take()
+            .ok_or("window_builder is None")?
+            .build(&event_loop)?;
 
         Ok((event_loop, window))
     }
@@ -90,11 +130,5 @@ impl Engine {
         self.renderer = Some(renderer);
 
         Ok(())
-    }
-}
-
-impl Default for Engine {
-    fn default() -> Self {
-        Self::new()
     }
 }
