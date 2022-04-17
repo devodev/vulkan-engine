@@ -1,2 +1,4 @@
-pub mod engine;
+mod engine;
 mod render;
+
+pub use self::engine::Engine;

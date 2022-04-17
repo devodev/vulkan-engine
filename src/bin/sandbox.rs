@@ -1,7 +1,7 @@
 use log::info;
 use std::error::Error;
 
-use core::engine::Engine;
+use core::Engine;
 
 fn main() {
     // initialize logger
