@@ -22,24 +22,28 @@ impl Engine {
     }
 
     pub fn run(&mut self) -> MyResult<()> {
-        let (event_loop, window) = self.init_window()?;
-        self.init_renderer(window)?;
-
         // flags
         let mut window_resized = false;
         let mut recreate_swapchain = false;
 
+        // window
+        let (event_loop, window) = self.init_window()?;
+
+        // renderer
+        self.init_renderer(window)?;
         let mut renderer = self
             .renderer
             .take()
-            .ok_or("Couldnt take renderer. Did you call self.init_renderer?")?;
+            .ok_or("Couldnt take renderer. Did you forget to call self.init_renderer() ?")?;
 
-        // run gameloop at 20 tps with a max frameskip of 5
+        // gameloop state
         let tps = 20;
         let max_frameskip = 5;
         let game_loop = GameLoop::new(tps, max_frameskip)?;
 
         debug!("start event loop");
+        // event_loop.run() hijacks the main thread and calls std::process::exit when done
+        // anything that has not been moved in the closure will not be dropped
         event_loop.run(move |event, _, control_flow| match event {
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
