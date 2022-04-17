@@ -1,4 +1,10 @@
 {
     "markdown.extension.toc.levels": "2..6",
-    "rust-analyzer.checkOnSave.command": "clippy"
+    "markdown.extension.toc.omittedFromToc": {
+        "README.md": ["## Table of contents"]
+    },
+    "rust-analyzer.checkOnSave.command": "clippy",
+    "[rust]": {
+        "editor.formatOnSave": true,
+    },
 }

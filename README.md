@@ -1,26 +1,33 @@
 # Vulkan Engine
 
+<p align="center">
+  <a href="https://github.com/devodev/vulkan-engine">
+    <img alt="sandbox1" src="assets/sandbox1.png" width="800">
+  </a>
+</p>
+
+## Table of contents
+
 - [Overview](#overview)
 - [Dependencies](#dependencies)
-  - [Install windows-msvc](#install-windows-msvc)
-- [Generate icons](#generate-icons)
+  - [Setup using MSVC on Windows](#setup-using-msvc-on-windows)
+- [Generate icon](#generate-icon)
 
 ## Overview
 
-This project is an attempt at writing a game engine in Rust from scratch.
+This project is a playground for me to learn [Rust](https://www.rust-lang.org/) as well as the [Vulkan Graphics API](https://www.khronos.org/vulkan/).
 
-It uses Vulkan as graphics API with the help of [vulkano-rs/vulkano](https://github.com/vulkano-rs/vulkano) rust library.
+It leverages [vulkano-rs/vulkano](https://github.com/vulkano-rs/vulkano) as a rust wrapper around Vulkan.
 
 ## Dependencies
 
-> Assumed OS: Windows 10
-
-We will be compiling libshaderc ourselves (vulkano dep), which means we will need to have these tools available in our PATH:
+We will be compiling libshaderc ourselves (vulkano dependency), which means we will need to have these tools available in our PATH:
 
 - CMake
 - Ninja
 - Python
-### Install windows-msvc
+
+### Setup using MSVC on Windows
 
 1. Install rust: <https://www.rust-lang.org/tools/install>
 2. Set the default Rust toolchain to msvc: `rustup default nightly-x86_64-pc-windows-msvc`.
@@ -43,9 +50,9 @@ We will be compiling libshaderc ourselves (vulkano dep), which means we will nee
 7. Add the msys2 mingw64 binary path to the PATH environment variable.
    1. `C:\msys64`
 
-## Generate icons
+## Generate icon
 
-Generate icons using the gen_icon crate
+> Generate icons using the gen_icon crate
 
 Generate sandbox icon
 

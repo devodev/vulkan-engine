@@ -1,6 +1,7 @@
 {
 	"version": "2.0.0",
 	"tasks": [
+        // clean
         {
             "type": "cargo",
             "command": "clean",
@@ -10,6 +11,7 @@
             "group": "none",
             "label": "rust: cargo clean"
         },
+        // check
         {
             "type": "cargo",
             "command": "check",
@@ -19,6 +21,7 @@
             "group": "build",
             "label": "rust: cargo check"
         },
+        // build
         {
             "type": "cargo",
             "command": "build",
@@ -28,6 +31,19 @@
             "group": "build",
             "label": "rust: cargo build"
         },
+        {
+            "type": "cargo",
+            "command": "build",
+            "args": [
+                "--release"
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": "build",
+            "label": "rust: cargo build (release)"
+        },
+        // run
         {
             "type": "cargo",
             "command": "run",
