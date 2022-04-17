@@ -80,7 +80,7 @@ impl Engine {
     }
 
     fn init_renderer(&mut self, window: Window) -> MyResult<()> {
-        debug!("init_vulkan");
+        debug!("init_renderer");
 
         let renderer = Renderer::new(window)?;
         self.renderer = Some(renderer);

@@ -1,4 +1,3 @@
-use log::debug;
 use std::error::Error;
 use std::sync::Arc;
 
@@ -113,8 +112,6 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(window: Window) -> Result<Self, Box<dyn Error>> {
-        debug!("init_vulkan");
-
         // -----------------------------------------------------------------------------------
         // create instance (Vulkan context)
         // -----------------------------------------------------------------------------------
