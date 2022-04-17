@@ -23,3 +23,6 @@ vulkano = "0.29.0"
 vulkano-shaders = "0.29.0"
 vulkano-win = "0.29.0"
 winit = "0.26.1"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1.12"
