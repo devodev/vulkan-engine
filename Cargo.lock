@@ -499,17 +499,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21163e139fa306126e6eedaf49ecdb4588f939600f0b1e770f4205ee4b7fa868"
 
 [[package]]
-name = "game-loop"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e1d00b6ce27badd1079304f24c6142b1595126689e65dbf31554d4720c923a4"
-dependencies = [
- "wasm-bindgen",
- "web-sys",
- "winit",
-]
-
-[[package]]
 name = "getrandom"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1370,7 +1359,6 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "env_logger",
- "game-loop",
  "image",
  "log",
  "vulkano",

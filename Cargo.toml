@@ -16,23 +16,6 @@ path = "src/bin/sandbox.rs"
 [dependencies]
 bytemuck = "1.8.0"
 env_logger = "0.9.0"
-# TODO: 0.9.0 does not build
-#
-# error[E0382]: use of moved value: `event`
-#   --> C:\Users\devodev\.cargo\registry\src\github.com-1ecc6299db9ec823\game-loop-0.9.0\src\helper.rs:77:19
-#    |
-# 71 |         event_loop.run(move |event, _, control_flow| {
-#    |                              ----- move occurs because `event` has type `Event<'_, T>`, which does not implement the `Copy` 
-# trait
-# ...
-# 75 |             handler(&mut game_loop, event);
-#    |                                     ----- value moved here
-# 76 | 
-# 77 |             match event {
-#    |                   ^^^^^ value used here after move
-
-# For more information about this error, try `rustc --explain E0382`.
-game-loop = { version = "0.8.2", features = ["window"] }
 image = "0.24.1"
 log = "0.4.16"
 vulkano = "0.29.0"
