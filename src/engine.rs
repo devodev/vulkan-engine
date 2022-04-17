@@ -6,7 +6,7 @@ use winit::{
     dpi::{LogicalSize, Size},
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder},
+    window::{Fullscreen, Icon, Window, WindowBuilder},
 };
 
 use crate::render::Renderer;
@@ -16,11 +16,17 @@ type MyResult<T> = Result<T, Box<dyn Error>>;
 #[derive(Debug, Clone)]
 pub struct EngineBuilder {
     window_size: Option<Size>,
+    window_title: Option<String>,
+    window_resizable: bool,
+    window_fullscreen: Option<Fullscreen>,
+    window_maximized: bool,
+    window_visible: bool,
+    window_icon: Option<Icon>,
 }
 
 impl EngineBuilder {
     pub fn new() -> Self {
-        Self { window_size: None }
+        Default::default()
     }
 
     pub fn with_window_size(mut self, s: Size) -> Self {
@@ -28,19 +34,67 @@ impl EngineBuilder {
         self
     }
 
-    pub fn build(&self) -> Engine {
-        let mut wb = WindowBuilder::new();
-        wb = wb.with_min_inner_size(Size::Logical(LogicalSize::new(320.0, 240.0)));
+    pub fn with_window_title(mut self, s: String) -> Self {
+        self.window_title = Some(s);
+        self
+    }
+
+    pub fn with_window_resizable(mut self, b: bool) -> Self {
+        self.window_resizable = b;
+        self
+    }
+
+    pub fn with_window_fullscreen(mut self, f: Fullscreen) -> Self {
+        self.window_fullscreen = Some(f);
+        self
+    }
+
+    pub fn with_window_maximized(mut self, b: bool) -> Self {
+        self.window_maximized = b;
+        self
+    }
+
+    pub fn with_window_visible(mut self, b: bool) -> Self {
+        self.window_visible = b;
+        self
+    }
+
+    pub fn with_window_icon(mut self, i: Icon) -> Self {
+        self.window_icon = Some(i);
+        self
+    }
+
+    pub fn build(&mut self) -> Engine {
+        let mut wb = WindowBuilder::new()
+            .with_min_inner_size(Size::Logical(LogicalSize::new(320.0, 240.0)))
+            .with_resizable(self.window_resizable)
+            .with_fullscreen(self.window_fullscreen.take())
+            .with_maximized(self.window_maximized)
+            .with_visible(self.window_visible)
+            .with_window_icon(self.window_icon.take());
+
         if let Some(window_size) = self.window_size {
             wb = wb.with_inner_size(window_size);
         }
+        if let Some(window_title) = &self.window_title {
+            wb = wb.with_title(window_title);
+        }
+
         Engine::new(wb)
     }
 }
 
 impl Default for EngineBuilder {
     fn default() -> Self {
-        Self::new()
+        Self {
+            window_size: None,
+            window_title: Some("Vulkan Engine".to_owned()),
+            window_resizable: true,
+            window_fullscreen: None,
+            window_maximized: false,
+            window_visible: true,
+            window_icon: None,
+        }
     }
 }
 
