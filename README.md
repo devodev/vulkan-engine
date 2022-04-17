@@ -3,6 +3,7 @@
 - [Overview](#overview)
 - [Dependencies](#dependencies)
   - [Install windows-msvc](#install-windows-msvc)
+- [Generate icons](#generate-icons)
 
 ## Overview
 
@@ -41,3 +42,13 @@ We will be compiling libshaderc ourselves (vulkano dep), which means we will nee
 6. Then in the msys2 terminal run: `pacman --noconfirm -Syu mingw-w64-x86_64-cmake mingw-w64-x86_64-python2 mingw-w64-x86_64-ninja`
 7. Add the msys2 mingw64 binary path to the PATH environment variable.
    1. `C:\msys64`
+
+## Generate icons
+
+Generate icons using the gen_icon crate
+
+Generate sandbox icon
+
+```
+cargo run --manifest-path gen_icon/Cargo.toml -- assets/engine-icon.png assets/engine-icon.ico
+```
