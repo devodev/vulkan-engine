@@ -22,6 +22,7 @@ pub struct EngineBuilder {
     window_maximized: bool,
     window_visible: bool,
     window_icon: Option<Icon>,
+    renderer_debug: bool,
 }
 
 impl EngineBuilder {
@@ -64,6 +65,11 @@ impl EngineBuilder {
         self
     }
 
+    pub fn with_renderer_debug(mut self, b: bool) -> Self {
+        self.renderer_debug = b;
+        self
+    }
+
     pub fn build(&mut self) -> Engine {
         let mut wb = WindowBuilder::new()
             .with_min_inner_size(Size::Logical(LogicalSize::new(320.0, 240.0)))
@@ -80,7 +86,7 @@ impl EngineBuilder {
             wb = wb.with_title(window_title);
         }
 
-        Engine::new(wb)
+        Engine::new(wb, self.renderer_debug)
     }
 }
 
@@ -94,6 +100,7 @@ impl Default for EngineBuilder {
             window_maximized: false,
             window_visible: true,
             window_icon: None,
+            renderer_debug: false,
         }
     }
 }
@@ -101,13 +108,15 @@ impl Default for EngineBuilder {
 pub struct Engine {
     window_builder: Option<WindowBuilder>,
     renderer: Option<Renderer>,
+    renderer_debug: bool,
 }
 
 impl Engine {
-    fn new(wb: WindowBuilder) -> Self {
+    fn new(wb: WindowBuilder, renderer_debug: bool) -> Self {
         Engine {
             window_builder: Some(wb),
             renderer: None,
+            renderer_debug,
         }
     }
 
@@ -174,7 +183,7 @@ impl Engine {
     fn init_renderer(&mut self, window: Window) -> MyResult<()> {
         debug!("init_renderer");
 
-        let renderer = Renderer::new(window)?;
+        let renderer = Renderer::new(window, self.renderer_debug)?;
         self.renderer = Some(renderer);
 
         Ok(())

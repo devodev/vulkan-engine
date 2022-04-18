@@ -1,7 +1,9 @@
+use std::collections::HashSet;
 use std::error::Error;
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
+use log::debug;
 use vulkano::buffer::TypedBufferAccess;
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
 use vulkano::command_buffer::{
@@ -12,7 +14,8 @@ use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType, QueueFamily}
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo};
 use vulkano::image::view::ImageView;
 use vulkano::image::{ImageAccess, ImageUsage, SwapchainImage};
-use vulkano::instance::{Instance, InstanceCreateInfo};
+use vulkano::instance::debug::{DebugCallback, MessageSeverity, MessageType};
+use vulkano::instance::{layers_list, Instance, InstanceCreateInfo, InstanceExtensions};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::vertex_input::BuffersDefinition;
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
@@ -110,15 +113,18 @@ pub struct Renderer {
     frames_in_flight: usize,
     fences: Fences,
     previous_fence_i: usize,
+
+    // debug
+    debug_callback: Option<DebugCallback>,
 }
 
 impl Renderer {
-    pub fn new(window: Window) -> Result<Self, Box<dyn Error>> {
+    pub fn new(window: Window, enable_debug: bool) -> Result<Self, Box<dyn Error>> {
         // -----------------------------------------------------------------------------------
         // create instance (Vulkan context)
         // -----------------------------------------------------------------------------------
 
-        let instance = create_instance()?;
+        let (instance, debug_callback) = create_instance(enable_debug)?;
 
         // -----------------------------------------------------------------------------------
         // create surface
@@ -234,6 +240,7 @@ impl Renderer {
             frames_in_flight,
             fences,
             previous_fence_i,
+            debug_callback,
         };
 
         Ok(r)
@@ -342,16 +349,108 @@ impl Renderer {
     }
 }
 
-type InstanceResult = Result<Arc<Instance>, Box<dyn Error>>;
+type InstanceResult = Result<(Arc<Instance>, Option<DebugCallback>), Box<dyn Error>>;
 
-fn create_instance() -> InstanceResult {
+fn create_instance(enable_debug: bool) -> InstanceResult {
+    debug!("List of Vulkan extensions supported by core:");
+    for ext in format!("{:?}", InstanceExtensions::supported_by_core()?)
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .split_terminator(',')
+        .map(|e| e.trim())
+    {
+        debug!("\t{}", ext);
+    }
+
+    debug!("List of Vulkan layers available to use:");
+    let layer_map = layers_list()?
+        .map(|l| l.name().to_owned())
+        .collect::<HashSet<_>>();
+    for l in layer_map.iter() {
+        debug!("\t{}", l);
+    }
+
+    // extensions
     let window_extensions = vulkano_win::required_extensions();
+    let extensions = InstanceExtensions {
+        ext_debug_utils: enable_debug,
+        ..window_extensions
+    };
+    debug!("List of Vulkan extensions to load:");
+    for ext in format!("{:?}", extensions)
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .split_terminator(',')
+        .map(|e| e.trim())
+    {
+        debug!("\t{}", ext);
+    }
+
+    // layers
+    let mut layers = Vec::new();
+    if enable_debug {
+        let debug_validation_layer = "VK_LAYER_KHRONOS_validation".to_owned();
+        if !layer_map.contains(&debug_validation_layer) {
+            return Err(
+                "debug validation layer requested but not supported (Did you install the Vulkan SDK?)"
+                    .into(),
+            );
+        }
+        // enable debug layer
+        layers.push(debug_validation_layer);
+    }
+
+    // instance
     let instance = Instance::new(InstanceCreateInfo {
-        enabled_extensions: window_extensions,
+        enabled_extensions: extensions,
+        enabled_layers: layers,
         ..Default::default()
     })?;
 
-    Ok(instance)
+    // if debug enabled, register debug callback
+    let mut callback = None;
+    if enable_debug {
+        debug!("creating debug callback");
+        let c = DebugCallback::new(
+            &instance,
+            MessageSeverity::all(),
+            MessageType::all(),
+            |msg| {
+                let ty = if msg.ty.general {
+                    "general"
+                } else if msg.ty.validation {
+                    "validation"
+                } else if msg.ty.performance {
+                    "performance"
+                } else {
+                    panic!("type no-impl");
+                };
+
+                let severity = if msg.severity.error {
+                    "error"
+                } else if msg.severity.warning {
+                    "warning"
+                } else if msg.severity.information {
+                    "information"
+                } else if msg.severity.verbose {
+                    "verbose"
+                } else {
+                    panic!("severity no-impl");
+                };
+
+                debug!(
+                    "[vulkan_debug][{}][{}][{}]: {}",
+                    msg.layer_prefix.unwrap_or("unknown"),
+                    ty,
+                    severity,
+                    msg.description
+                );
+            },
+        )?;
+        callback = Some(c);
+    }
+
+    Ok((instance, callback))
 }
 
 type PhysicalDeviceResult<'a> = Result<(PhysicalDevice<'a>, QueueFamily<'a>), Box<dyn Error>>;

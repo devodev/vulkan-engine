@@ -50,6 +50,10 @@ We will be compiling libshaderc ourselves (vulkano dependency), which means we w
 7. Add the msys2 mingw64 binary path to the PATH environment variable.
    1. `C:\msys64`
 
+Optionnaly, install the Vulkan SDK if you plan on enabling Vulkan debug capabilities (`engine.enable_renderer_debug()`):
+
+1. Download and install Vulkan SDK from: <https://vulkan.lunarg.com/sdk/home#windows>
+
 ## Generate icon
 
 > Generate icons using the gen_icon crate
