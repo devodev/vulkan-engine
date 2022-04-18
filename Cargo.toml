@@ -19,9 +19,13 @@ env_logger = "0.9.0"
 gameloop = "0.2.0"
 image = "0.24.1"
 log = "0.4.16"
-vulkano = "0.29.0"
-vulkano-shaders = "0.29.0"
-vulkano-win = "0.29.0"
+# Benefit from latest fixes, although might be unstable
+# - Fix1: https://github.com/vulkano-rs/vulkano/issues/1858
+#     [2022-04-18T15:30:07Z DEBUG core::render] [vulkan_debug][VUID-VkSurfaceFormat2KHR-sType-sType][validation][error]: Validation Error: [ VUID-VkSurfaceFormat2KHR-sType-sType ] Object 0: VK_NULL_HANDLE, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0xcb03d9a3 | vkGetPhysicalDeviceSurfaceFormats2KHR: parameter pSurfaceFormats[0].sType must be VK_STRUCTURE_TYPE_SURFACE_FORMAT_2_KHR The Vulkan spec states: sType must be VK_STRUCTURE_TYPE_SURFACE_FORMAT_2_KHR (https://vulkan.lunarg.com/doc/view/1.3.204.1/windows/1.3-extensions/vkspec.html#VUID-VkSurfaceFormat2KHR-sType-sType)
+#     [2022-04-18T15:30:07Z DEBUG core::render] [vulkan_debug][VUID-VkSurfaceFormat2KHR-pNext-pNext][validation][error]: Validation Error: [ VUID-VkSurfaceFormat2KHR-pNext-pNext ] Object 0: VK_NULL_HANDLE, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0x25be0b23 | vkGetPhysicalDeviceSurfaceFormats2KHR: value of pSurfaceFormats[0].pNext must be NULL. This error is based on the Valid Usage documentation for version 204 of the Vulkan header.  It is possible that you are using a struct from a private extension or an extension that was added to a later version of the Vulkan header, in which case the use of pSurfaceFormats[0].pNext is undefined and may not work correctly with validation enabled The Vulkan spec states: pNext must be NULL (https://vulkan.lunarg.com/doc/view/1.3.204.1/windows/1.3-extensions/vkspec.html#VUID-VkSurfaceFormat2KHR-pNext-pNext)
+vulkano = { git ="https://github.com/vulkano-rs/vulkano", rev = "661f571" }
+vulkano-shaders = { git ="https://github.com/vulkano-rs/vulkano", rev = "661f571" }
+vulkano-win = { git ="https://github.com/vulkano-rs/vulkano", rev = "661f571" }
 winit = "0.26.1"
 
 [target.'cfg(windows)'.build-dependencies]

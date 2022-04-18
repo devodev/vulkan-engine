@@ -14,7 +14,10 @@ use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType, QueueFamily}
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo};
 use vulkano::image::view::ImageView;
 use vulkano::image::{ImageAccess, ImageUsage, SwapchainImage};
-use vulkano::instance::debug::{DebugCallback, MessageSeverity, MessageType};
+use vulkano::instance::debug::{
+    DebugUtilsMessageSeverity, DebugUtilsMessageType, DebugUtilsMessenger,
+    DebugUtilsMessengerCreateInfo,
+};
 use vulkano::instance::{layers_list, Instance, InstanceCreateInfo, InstanceExtensions};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::vertex_input::BuffersDefinition;
@@ -115,7 +118,7 @@ pub struct Renderer {
     previous_fence_i: usize,
 
     // debug
-    debug_callback: Option<DebugCallback>,
+    debug_callback: Option<DebugUtilsMessenger>,
 }
 
 impl Renderer {
@@ -349,7 +352,7 @@ impl Renderer {
     }
 }
 
-type InstanceResult = Result<(Arc<Instance>, Option<DebugCallback>), Box<dyn Error>>;
+type InstanceResult = Result<(Arc<Instance>, Option<DebugUtilsMessenger>), Box<dyn Error>>;
 
 fn create_instance(enable_debug: bool) -> InstanceResult {
     debug!("List of Vulkan extensions supported by core:");
@@ -411,42 +414,46 @@ fn create_instance(enable_debug: bool) -> InstanceResult {
     let mut callback = None;
     if enable_debug {
         debug!("creating debug callback");
-        let c = DebugCallback::new(
-            &instance,
-            MessageSeverity::all(),
-            MessageType::all(),
-            |msg| {
-                let ty = if msg.ty.general {
-                    "general"
-                } else if msg.ty.validation {
-                    "validation"
-                } else if msg.ty.performance {
-                    "performance"
-                } else {
-                    panic!("type no-impl");
-                };
+        let c = unsafe {
+            DebugUtilsMessenger::new(
+                instance.clone(),
+                DebugUtilsMessengerCreateInfo {
+                    message_severity: DebugUtilsMessageSeverity::all(),
+                    message_type: DebugUtilsMessageType::all(),
+                    ..DebugUtilsMessengerCreateInfo::user_callback(Arc::new(|msg| {
+                        let ty = if msg.ty.general {
+                            "general"
+                        } else if msg.ty.validation {
+                            "validation"
+                        } else if msg.ty.performance {
+                            "performance"
+                        } else {
+                            panic!("type no-impl");
+                        };
 
-                let severity = if msg.severity.error {
-                    "error"
-                } else if msg.severity.warning {
-                    "warning"
-                } else if msg.severity.information {
-                    "information"
-                } else if msg.severity.verbose {
-                    "verbose"
-                } else {
-                    panic!("severity no-impl");
-                };
+                        let severity = if msg.severity.error {
+                            "error"
+                        } else if msg.severity.warning {
+                            "warning"
+                        } else if msg.severity.information {
+                            "information"
+                        } else if msg.severity.verbose {
+                            "verbose"
+                        } else {
+                            panic!("severity no-impl");
+                        };
 
-                debug!(
-                    "[vulkan_debug][{}][{}][{}]: {}",
-                    msg.layer_prefix.unwrap_or("unknown"),
-                    ty,
-                    severity,
-                    msg.description
-                );
-            },
-        )?;
+                        debug!(
+                            "[vulkan_debug][{}][{}][{}]: {}",
+                            msg.layer_prefix.unwrap_or("unknown"),
+                            ty,
+                            severity,
+                            msg.description
+                        )
+                    }))
+                },
+            )?
+        };
         callback = Some(c);
     }
 
