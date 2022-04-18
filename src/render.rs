@@ -89,6 +89,7 @@ type Fences = Vec<
 
 #[allow(dead_code)]
 pub struct Renderer {
+    // renderer state
     instance: Arc<Instance>,
     surface: Arc<Surface<Window>>,
     device: Arc<Device>,
@@ -101,6 +102,9 @@ pub struct Renderer {
     fragment_shader: Arc<ShaderModule>,
     pipeline: Arc<GraphicsPipeline>,
     framebuffers: Vec<Arc<Framebuffer>>,
+
+    // window state
+    recreate_swapchain: bool,
 
     // event_loop state
     frames_in_flight: usize,
@@ -230,6 +234,7 @@ impl Renderer {
             fragment_shader,
             pipeline,
             framebuffers,
+            recreate_swapchain: false,
             frames_in_flight,
             fences,
             previous_fence_i,
@@ -238,8 +243,12 @@ impl Renderer {
         Ok(r)
     }
 
-    pub fn render(&mut self, recreate_swapchain: &mut bool) {
-        if *recreate_swapchain {
+    pub fn window_resized(&mut self) {
+        self.recreate_swapchain = true;
+    }
+
+    pub fn render(&mut self) {
+        if self.recreate_swapchain {
             // recreate swapchain
             let (new_swapchain, new_images) = match self.swapchain.recreate(SwapchainCreateInfo {
                 image_extent: self.surface.window().inner_size().into(),
@@ -275,13 +284,13 @@ impl Renderer {
             match swapchain::acquire_next_image(self.swapchain.clone(), None) {
                 Ok(r) => r,
                 Err(AcquireError::OutOfDate) => {
-                    *recreate_swapchain = true;
+                    self.recreate_swapchain = true;
                     return;
                 }
                 Err(e) => panic!("Failed to acquire next image: {:?}", e),
             };
         if suboptimal {
-            *recreate_swapchain = true;
+            self.recreate_swapchain = true;
         }
 
         // wait for the fence related to the acquired image to finish
@@ -322,7 +331,7 @@ impl Renderer {
         self.fences[image_i] = match future {
             Ok(value) => Some(Arc::new(value)),
             Err(FlushError::OutOfDate) => {
-                *recreate_swapchain = true;
+                self.recreate_swapchain = true;
                 None
             }
             Err(e) => {
