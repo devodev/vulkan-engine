@@ -118,11 +118,7 @@ impl Renderer {
         // create instance (Vulkan context)
         // -----------------------------------------------------------------------------------
 
-        let window_extensions = vulkano_win::required_extensions();
-        let instance = Instance::new(InstanceCreateInfo {
-            enabled_extensions: window_extensions,
-            ..Default::default()
-        })?;
+        let instance = create_instance()?;
 
         // -----------------------------------------------------------------------------------
         // create surface
@@ -342,6 +338,18 @@ impl Renderer {
 
         self.previous_fence_i = image_i;
     }
+}
+
+type InstanceResult = Result<Arc<Instance>, Box<dyn Error>>;
+
+fn create_instance() -> InstanceResult {
+    let window_extensions = vulkano_win::required_extensions();
+    let instance = Instance::new(InstanceCreateInfo {
+        enabled_extensions: window_extensions,
+        ..Default::default()
+    })?;
+
+    Ok(instance)
 }
 
 type PhysicalDeviceResult<'a> = Result<(PhysicalDevice<'a>, QueueFamily<'a>), Box<dyn Error>>;
