@@ -7,6 +7,8 @@ use winit::{
     window::Icon,
 };
 
+const ICON_BYTES: &[u8] = include_bytes!("../../assets/engine-icon.png");
+
 fn main() {
     // initialize logger
     env_logger::Builder::new()
@@ -15,8 +17,8 @@ fn main() {
         .init();
 
     // load window icon
-    let icon_bytes = include_bytes!("../../assets/engine-icon.png");
-    let icon_image = image::load_from_memory(icon_bytes).expect("failed to load image from bytes");
+    let icon_image =
+        image::load_from_memory(ICON_BYTES).expect("failed to load image from embeded");
     let icon = match Icon::from_rgba(
         icon_image.clone().into_bytes(),
         icon_image.width(),
