@@ -1,4 +1,4 @@
-enum PipelineType {
+pub enum PipelineType {
     Graphics,
 }
 

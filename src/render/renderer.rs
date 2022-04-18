@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
 use vulkano::buffer::TypedBufferAccess;
-use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferExecFuture, CommandBufferUsage,
     PrimaryAutoCommandBuffer, SubpassContents,
@@ -22,6 +21,8 @@ use vulkano::sync::{FenceSignalFuture, FlushError, GpuFuture, JoinFuture};
 use vulkano::{swapchain, sync};
 use winit::window::Window;
 
+use super::buffer::Buffer;
+use super::shader::Shader;
 use crate::render::{Device, DeviceDefinition};
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
@@ -90,9 +91,9 @@ pub struct Renderer {
     device: Device,
 
     // triangle graphics context
-    vertex_buffer: Arc<CpuAccessibleBuffer<[Vertex]>>,
-    vertex_shader: Arc<ShaderModule>,
-    fragment_shader: Arc<ShaderModule>,
+    vertex_buffer: Arc<Buffer<[Vertex]>>,
+    vertex_shader: Arc<Shader>,
+    fragment_shader: Arc<Shader>,
     pipeline: Arc<GraphicsPipeline>,
 
     // window state
@@ -113,10 +114,8 @@ impl Renderer {
         // -----------------------------------------------------------------------------------
 
         // create vertex buffer (triangle)
-        let vertex_buffer = CpuAccessibleBuffer::from_iter(
-            device.device.clone(),
-            BufferUsage::vertex_buffer(),
-            false,
+        let vertex_buffer = Buffer::vertex(
+            &device,
             vec![
                 Vertex::new([-0.5, -0.5]),
                 Vertex::new([0.0, 0.5]),
@@ -126,17 +125,16 @@ impl Renderer {
         )?;
 
         // load shaders
-        let vertex_shader = vs::load(device.device.clone())?;
-        let fragment_shader = fs::load(device.device.clone())?;
+        let vertex_shader = Shader::vertex(&device, vs::load)?;
+        let fragment_shader = Shader::fragment(&device, fs::load)?;
 
         // create actual pipeline
-        let dimensions = device.image_views[0].image().dimensions().width_height();
         let pipeline = create_graphics_pipeline(
             device.device.clone(),
-            vertex_shader.clone(),
-            fragment_shader.clone(),
+            vertex_shader.shader.clone(),
+            fragment_shader.shader.clone(),
             device.render_pass.clone(),
-            dimensions,
+            device.dimensions(),
         )
         .unwrap();
 
@@ -190,8 +188,8 @@ impl Renderer {
                 .width_height();
             self.pipeline = create_graphics_pipeline(
                 self.device.device.clone(),
-                self.vertex_shader.clone(),
-                self.fragment_shader.clone(),
+                self.vertex_shader.shader.clone(),
+                self.fragment_shader.shader.clone(),
                 self.device.render_pass.clone(),
                 dimensions,
             )
@@ -303,7 +301,7 @@ fn create_command_buffers(
     queue: Arc<Queue>,
     pipeline: Arc<GraphicsPipeline>,
     framebuffers: &[Arc<Framebuffer>],
-    vertex_buffer: Arc<CpuAccessibleBuffer<[Vertex]>>,
+    vertex_buffer: Arc<Buffer<[Vertex]>>,
 ) -> CommandbuffersResult {
     let clear_value = [0.0, 0.0, 1.0, 1.0];
     let fbs = framebuffers
@@ -326,8 +324,8 @@ fn create_command_buffers(
                 )
                 .unwrap()
                 .bind_pipeline_graphics(pipeline.clone())
-                .bind_vertex_buffers(0, vertex_buffer.clone())
-                .draw(vertex_buffer.clone().len() as u32, 1, 0, 0)
+                .bind_vertex_buffers(0, vertex_buffer.buffer.clone())
+                .draw(vertex_buffer.buffer.clone().len() as u32, 1, 0, 0)
                 .unwrap()
                 .end_render_pass()
                 .unwrap();

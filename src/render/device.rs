@@ -1,6 +1,7 @@
 use std::{collections::HashSet, error::Error, result, sync::Arc};
 
 use log::debug;
+use vulkano::image::ImageAccess;
 use vulkano::{
     device::{
         physical::{PhysicalDevice, PhysicalDeviceType, QueueFamily},
@@ -124,6 +125,10 @@ impl Device {
             render_pass,
             framebuffers,
         })
+    }
+
+    pub fn dimensions(&self) -> [u32; 2] {
+        self.image_views[0].image().dimensions().width_height()
     }
 
     pub fn recreate_swapchain(&mut self) -> Result<()> {
