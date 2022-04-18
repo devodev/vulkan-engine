@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::error::Error;
+use std::result;
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
@@ -33,6 +34,8 @@ use vulkano::sync::{FenceSignalFuture, FlushError, GpuFuture, JoinFuture};
 use vulkano::{swapchain, sync};
 use vulkano_win::create_surface_from_winit;
 use winit::window::Window;
+
+type Result<T> = result::Result<T, Box<dyn Error>>;
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, Zeroable, Pod)]
@@ -122,7 +125,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(window: Window, enable_debug: bool) -> Result<Self, Box<dyn Error>> {
+    pub fn new(window: Window, enable_debug: bool) -> Result<Self> {
         // -----------------------------------------------------------------------------------
         // create instance (Vulkan context)
         // -----------------------------------------------------------------------------------
@@ -352,7 +355,7 @@ impl Renderer {
     }
 }
 
-type InstanceResult = Result<(Arc<Instance>, Option<DebugUtilsMessenger>), Box<dyn Error>>;
+type InstanceResult = Result<(Arc<Instance>, Option<DebugUtilsMessenger>)>;
 
 fn create_instance(enable_debug: bool) -> InstanceResult {
     debug!("List of Vulkan extensions supported by core:");
@@ -460,7 +463,7 @@ fn create_instance(enable_debug: bool) -> InstanceResult {
     Ok((instance, callback))
 }
 
-type PhysicalDeviceResult<'a> = Result<(PhysicalDevice<'a>, QueueFamily<'a>), Box<dyn Error>>;
+type PhysicalDeviceResult<'a> = Result<(PhysicalDevice<'a>, QueueFamily<'a>)>;
 
 fn select_physical_device<'a>(
     instance: &'a Arc<Instance>,
@@ -486,13 +489,10 @@ fn select_physical_device<'a>(
     Ok((physical_device, queue_family))
 }
 
-type SwapchainResult = Result<
-    (
-        Arc<Swapchain<Window>>,
-        Vec<Arc<ImageView<SwapchainImage<Window>>>>,
-    ),
-    Box<dyn Error>,
->;
+type SwapchainResult = Result<(
+    Arc<Swapchain<Window>>,
+    Vec<Arc<ImageView<SwapchainImage<Window>>>>,
+)>;
 
 fn create_swapchain<'a>(
     physical_device: &PhysicalDevice,
@@ -533,7 +533,7 @@ fn create_swapchain<'a>(
     Ok((swapchain, images))
 }
 
-type RenderPassResult = Result<Arc<RenderPass>, Box<dyn Error>>;
+type RenderPassResult = Result<Arc<RenderPass>>;
 
 fn create_render_pass(device: Arc<Device>, swapchain: Arc<Swapchain<Window>>) -> RenderPassResult {
     let rp = vulkano::single_pass_renderpass!(
@@ -555,7 +555,7 @@ fn create_render_pass(device: Arc<Device>, swapchain: Arc<Swapchain<Window>>) ->
     Ok(rp)
 }
 
-type GraphicsPipelineResult = Result<Arc<GraphicsPipeline>, Box<dyn Error>>;
+type GraphicsPipelineResult = Result<Arc<GraphicsPipeline>>;
 
 fn create_graphics_pipeline(
     device: Arc<Device>,
@@ -585,7 +585,7 @@ fn create_graphics_pipeline(
     Ok(p)
 }
 
-type FramebuffersResult = Result<Vec<Arc<Framebuffer>>, Box<dyn Error>>;
+type FramebuffersResult = Result<Vec<Arc<Framebuffer>>>;
 
 fn create_framebuffers(
     image_views: &[Arc<ImageView<SwapchainImage<Window>>>],
@@ -608,7 +608,7 @@ fn create_framebuffers(
     Ok(fbs)
 }
 
-type CommandbuffersResult = Result<Vec<Arc<PrimaryAutoCommandBuffer>>, Box<dyn Error>>;
+type CommandbuffersResult = Result<Vec<Arc<PrimaryAutoCommandBuffer>>>;
 
 // create a command buffer for each framebuffer
 fn create_command_buffers(
@@ -652,7 +652,7 @@ fn create_command_buffers(
     Ok(fbs)
 }
 
-type PipelineResult = Result<(Arc<GraphicsPipeline>, Vec<Arc<Framebuffer>>), Box<dyn Error>>;
+type PipelineResult = Result<(Arc<GraphicsPipeline>, Vec<Arc<Framebuffer>>)>;
 
 fn window_size_dependent_setup(
     device: Arc<Device>,

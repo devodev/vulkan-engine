@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, result};
 
 use gameloop::GameLoop;
 use log::debug;
@@ -11,7 +11,7 @@ use winit::{
 
 use crate::render::Renderer;
 
-type MyResult<T> = Result<T, Box<dyn Error>>;
+type Result<T> = result::Result<T, Box<dyn Error>>;
 
 #[derive(Debug, Clone)]
 pub struct EngineBuilder {
@@ -120,7 +120,7 @@ impl Engine {
         }
     }
 
-    pub fn run(&mut self) -> MyResult<()> {
+    pub fn run(&mut self) -> Result<()> {
         // window
         let (event_loop, window) = self.init_window()?;
 
@@ -168,7 +168,7 @@ impl Engine {
         });
     }
 
-    fn init_window(&mut self) -> MyResult<(EventLoop<()>, Window)> {
+    fn init_window(&mut self) -> Result<(EventLoop<()>, Window)> {
         debug!("init_window");
         let event_loop = EventLoop::new();
         let window = self
@@ -180,7 +180,7 @@ impl Engine {
         Ok((event_loop, window))
     }
 
-    fn init_renderer(&mut self, window: Window) -> MyResult<()> {
+    fn init_renderer(&mut self, window: Window) -> Result<()> {
         debug!("init_renderer");
 
         let renderer = Renderer::new(window, self.renderer_debug)?;
