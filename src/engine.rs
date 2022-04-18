@@ -158,9 +158,13 @@ impl Engine {
                 for action in game_loop.actions() {
                     match action {
                         gameloop::FrameAction::Tick => {
-                            // todo!("update state")
+                            // // update state
                         }
-                        gameloop::FrameAction::Render { interpolation: _ } => renderer.render(),
+                        gameloop::FrameAction::Render { interpolation: _ } => {
+                            renderer.begin();
+                            // gather components and submit work
+                            renderer.end()
+                        }
                     }
                 }
             }
