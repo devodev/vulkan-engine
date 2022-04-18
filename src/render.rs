@@ -93,7 +93,7 @@ pub struct Renderer {
     instance: Arc<Instance>,
     surface: Arc<Surface<Window>>,
     device: Arc<Device>,
-    gfx_queue: Arc<Queue>,
+    queues: Vec<Arc<Queue>>,
     swapchain: Arc<Swapchain<Window>>,
     image_views: Vec<Arc<ImageView<SwapchainImage<Window>>>>,
     render_pass: Arc<RenderPass>,
@@ -141,7 +141,7 @@ impl Renderer {
         // create logical device
         // -----------------------------------------------------------------------------------
 
-        let (device, mut queues) = Device::new(
+        let (device, queues) = Device::new(
             physical_device,
             DeviceCreateInfo {
                 queue_create_infos: vec![QueueCreateInfo::family(queue_family)],
@@ -151,7 +151,7 @@ impl Renderer {
                 ..Default::default()
             },
         )?;
-        let queue = queues.next().ok_or("no queue found in queue_family")?;
+        let queues = queues.collect();
 
         // -----------------------------------------------------------------------------------
         // create swapchain and image views
@@ -221,7 +221,7 @@ impl Renderer {
             instance,
             surface,
             device,
-            gfx_queue: queue,
+            queues,
             swapchain,
             image_views,
             render_pass,
@@ -308,9 +308,11 @@ impl Renderer {
             Some(fence) => fence.boxed(),
         };
 
+        let gfx_queue = self.queues[0].clone();
+
         let command_buffers = create_command_buffers(
             self.device.clone(),
-            self.gfx_queue.clone(),
+            gfx_queue.clone(),
             self.pipeline.clone(),
             &self.framebuffers,
             self.vertex_buffer.clone(),
@@ -319,9 +321,9 @@ impl Renderer {
 
         let future = previous_future
             .join(acquire_future)
-            .then_execute(self.gfx_queue.clone(), command_buffers[image_i].clone())
+            .then_execute(gfx_queue.clone(), command_buffers[image_i].clone())
             .unwrap()
-            .then_swapchain_present(self.gfx_queue.clone(), self.swapchain.clone(), image_i)
+            .then_swapchain_present(gfx_queue, self.swapchain.clone(), image_i)
             .then_signal_fence_and_flush();
 
         self.fences[image_i] = match future {
