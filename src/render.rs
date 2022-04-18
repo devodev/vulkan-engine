@@ -164,7 +164,7 @@ impl Renderer {
         // create render pass
         // -----------------------------------------------------------------------------------
 
-        let render_pass = get_render_pass(device.clone(), swapchain.clone())?;
+        let render_pass = create_render_pass(device.clone(), swapchain.clone())?;
 
         // -----------------------------------------------------------------------------------
         // create graphics pipeline and framebuffers
@@ -354,7 +354,7 @@ fn create_instance() -> InstanceResult {
 
 type PhysicalDeviceResult<'a> = Result<(PhysicalDevice<'a>, QueueFamily<'a>), Box<dyn Error>>;
 
-pub fn select_physical_device<'a>(
+fn select_physical_device<'a>(
     instance: &'a Arc<Instance>,
     surface: Arc<Surface<Window>>,
     device_extensions: &DeviceExtensions,
@@ -386,7 +386,7 @@ type SwapchainResult = Result<
     Box<dyn Error>,
 >;
 
-pub fn create_swapchain<'a>(
+fn create_swapchain<'a>(
     physical_device: &PhysicalDevice,
     device: &'a Arc<Device>,
     surface: Arc<Surface<Window>>,
@@ -427,7 +427,7 @@ pub fn create_swapchain<'a>(
 
 type RenderPassResult = Result<Arc<RenderPass>, Box<dyn Error>>;
 
-pub fn get_render_pass(device: Arc<Device>, swapchain: Arc<Swapchain<Window>>) -> RenderPassResult {
+fn create_render_pass(device: Arc<Device>, swapchain: Arc<Swapchain<Window>>) -> RenderPassResult {
     let rp = vulkano::single_pass_renderpass!(
         device,
         attachments: {
@@ -449,7 +449,7 @@ pub fn get_render_pass(device: Arc<Device>, swapchain: Arc<Swapchain<Window>>) -
 
 type GraphicsPipelineResult = Result<Arc<GraphicsPipeline>, Box<dyn Error>>;
 
-pub fn create_graphics_pipeline(
+fn create_graphics_pipeline(
     device: Arc<Device>,
     vs: Arc<ShaderModule>,
     fs: Arc<ShaderModule>,
@@ -479,7 +479,7 @@ pub fn create_graphics_pipeline(
 
 type FramebuffersResult = Result<Vec<Arc<Framebuffer>>, Box<dyn Error>>;
 
-pub fn create_framebuffers(
+fn create_framebuffers(
     image_views: &[Arc<ImageView<SwapchainImage<Window>>>],
     render_pass: Arc<RenderPass>,
 ) -> FramebuffersResult {
@@ -503,7 +503,7 @@ pub fn create_framebuffers(
 type CommandbuffersResult = Result<Vec<Arc<PrimaryAutoCommandBuffer>>, Box<dyn Error>>;
 
 // create a command buffer for each framebuffer
-pub fn create_command_buffers(
+fn create_command_buffers(
     device: Arc<Device>,
     queue: Arc<Queue>,
     pipeline: Arc<GraphicsPipeline>,
