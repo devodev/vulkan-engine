@@ -113,7 +113,6 @@ impl Engine {
 
     pub fn run(&mut self) -> MyResult<()> {
         // flags
-        let mut window_resized = false;
         let mut recreate_swapchain = false;
 
         // window
@@ -145,7 +144,7 @@ impl Engine {
                 event: WindowEvent::Resized(_),
                 ..
             } => {
-                window_resized = true;
+                recreate_swapchain = true;
             }
             Event::MainEventsCleared => {
                 // NOTE: the MainEventsCleared event "will be emitted when all input events
@@ -156,7 +155,7 @@ impl Engine {
                             // todo!("update state")
                         }
                         gameloop::FrameAction::Render { interpolation: _ } => {
-                            renderer.render(&mut window_resized, &mut recreate_swapchain)
+                            renderer.render(&mut recreate_swapchain)
                         }
                     }
                 }

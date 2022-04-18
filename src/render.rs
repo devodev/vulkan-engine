@@ -11,7 +11,7 @@ use vulkano::command_buffer::{
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType, QueueFamily};
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo};
 use vulkano::image::view::ImageView;
-use vulkano::image::{ImageUsage, SwapchainImage};
+use vulkano::image::{ImageAccess, ImageUsage, SwapchainImage};
 use vulkano::instance::{Instance, InstanceCreateInfo};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::vertex_input::BuffersDefinition;
@@ -94,15 +94,13 @@ pub struct Renderer {
     device: Arc<Device>,
     gfx_queue: Arc<Queue>,
     swapchain: Arc<Swapchain<Window>>,
-    swapchain_images: Vec<Arc<SwapchainImage<Window>>>,
+    image_views: Vec<Arc<ImageView<SwapchainImage<Window>>>>,
     render_pass: Arc<RenderPass>,
     vertex_buffer: Arc<CpuAccessibleBuffer<[Vertex]>>,
     vertex_shader: Arc<ShaderModule>,
     fragment_shader: Arc<ShaderModule>,
     pipeline: Arc<GraphicsPipeline>,
     framebuffers: Vec<Arc<Framebuffer>>,
-    viewport: Viewport,
-    command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
 
     // event_loop state
     frames_in_flight: usize,
@@ -156,19 +154,11 @@ impl Renderer {
         let queue = queues.next().ok_or("no queue found in queue_family")?;
 
         // -----------------------------------------------------------------------------------
-        // create swapchain
+        // create swapchain and image views
         // -----------------------------------------------------------------------------------
 
-        let (swapchain, swapchain_images) =
+        let (swapchain, image_views) =
             create_swapchain(&physical_device, &device, surface.clone())?;
-
-        // -----------------------------------------------------------------------------------
-        // create image views
-        // -----------------------------------------------------------------------------------
-
-        // TODO: currently done inline when creating framebuffers using swapchain_images
-        //       should use iterator and create right away image views as we will never
-        //       need raw images.
 
         // -----------------------------------------------------------------------------------
         // create render pass
@@ -177,7 +167,7 @@ impl Renderer {
         let render_pass = get_render_pass(device.clone(), swapchain.clone())?;
 
         // -----------------------------------------------------------------------------------
-        // create graphics pipeline
+        // create graphics pipeline and framebuffers
         // -----------------------------------------------------------------------------------
 
         // create vertex buffer (triangle)
@@ -197,25 +187,20 @@ impl Renderer {
         let vertex_shader = vs::load(device.clone())?;
         let fragment_shader = fs::load(device.clone())?;
 
-        // create actual pipeline
-        let pipeline = create_graphics_pipeline(
+        // create actual pipeline and framebuffers
+        let (pipeline, framebuffers) = window_size_dependent_setup(
             device.clone(),
             vertex_shader.clone(),
             fragment_shader.clone(),
+            &image_views,
             render_pass.clone(),
         )?;
-
-        // -----------------------------------------------------------------------------------
-        // create framebuffers
-        // -----------------------------------------------------------------------------------
-
-        let framebuffers = create_framebuffers(&swapchain_images, render_pass.clone())?;
 
         // -----------------------------------------------------------------------------------
         // create command pool
         // -----------------------------------------------------------------------------------
 
-        // TODO: this is currently handled automatically by Vulkano when creating
+        // NOTE: this is currently handled automatically by Vulkano when creating
         //       command buffers. It will request the default command pool from
         //       the provided device and queue family.
         //       Ref: AutoCommandBufferBuilder::primary().
@@ -224,22 +209,11 @@ impl Renderer {
         // create command buffers
         // -----------------------------------------------------------------------------------
 
-        let viewport = Viewport {
-            origin: [0.0, 0.0],
-            dimensions: surface.window().inner_size().into(),
-            depth_range: 0.0..1.0,
-        };
-        let command_buffers = create_command_buffers(
-            device.clone(),
-            queue.clone(),
-            pipeline.clone(),
-            &framebuffers,
-            vertex_buffer.clone(),
-            viewport.clone(),
-        )?;
+        // NOTE: Created every frame in the event loop
+        //
 
         // Frames in flight: executing instructions parallel to the GPU
-        let frames_in_flight = swapchain_images.len();
+        let frames_in_flight = image_views.len();
         let fences: Fences = vec![None; frames_in_flight];
         let previous_fence_i = 0;
 
@@ -249,15 +223,13 @@ impl Renderer {
             device,
             gfx_queue: queue,
             swapchain,
-            swapchain_images,
+            image_views,
             render_pass,
             vertex_buffer,
             vertex_shader,
             fragment_shader,
             pipeline,
             framebuffers,
-            viewport,
-            command_buffers,
             frames_in_flight,
             fences,
             previous_fence_i,
@@ -266,16 +238,11 @@ impl Renderer {
         Ok(r)
     }
 
-    pub fn render(&mut self, window_resized: &mut bool, recreate_swapchain: &mut bool) {
-        if *window_resized || *recreate_swapchain {
-            *recreate_swapchain = false;
-
-            // acquire new dimensions
-            let new_dimensions = self.surface.window().inner_size();
-
+    pub fn render(&mut self, recreate_swapchain: &mut bool) {
+        if *recreate_swapchain {
             // recreate swapchain
             let (new_swapchain, new_images) = match self.swapchain.recreate(SwapchainCreateInfo {
-                image_extent: new_dimensions.into(),
+                image_extent: self.surface.window().inner_size().into(),
                 ..self.swapchain.create_info()
             }) {
                 Ok(r) => r,
@@ -284,39 +251,26 @@ impl Renderer {
             };
             self.swapchain = new_swapchain;
 
-            // recreate framebuffers
-            let new_framebuffers =
-                create_framebuffers(&new_images, self.render_pass.clone()).unwrap();
+            // this is duplicated from create_swapchain()
+            let new_images = new_images
+                .iter()
+                .map(|img| ImageView::new_default(img.clone()).unwrap())
+                .collect::<Vec<Arc<ImageView<SwapchainImage<Window>>>>>();
 
+            // recreate pipeline and framebuffers
+            let (new_pipeline, new_framebuffers) = window_size_dependent_setup(
+                self.device.clone(),
+                self.vertex_shader.clone(),
+                self.fragment_shader.clone(),
+                &new_images,
+                self.render_pass.clone(),
+            )
+            .expect("failed to recreate graphics pipeline and framebuffers");
+            self.pipeline = new_pipeline;
             self.framebuffers = new_framebuffers;
-
-            if *window_resized {
-                *window_resized = false;
-
-                self.viewport.dimensions = new_dimensions.into();
-
-                let new_pipeline = create_graphics_pipeline(
-                    self.device.clone(),
-                    self.vertex_shader.clone(),
-                    self.fragment_shader.clone(),
-                    self.render_pass.clone(),
-                )
-                .unwrap();
-
-                self.pipeline = new_pipeline;
-
-                self.command_buffers = create_command_buffers(
-                    self.device.clone(),
-                    self.gfx_queue.clone(),
-                    self.pipeline.clone(),
-                    &self.framebuffers,
-                    self.vertex_buffer.clone(),
-                    self.viewport.clone(),
-                )
-                .unwrap();
-            }
         }
 
+        // acquire next image from swapchain
         let (image_i, suboptimal, acquire_future) =
             match swapchain::acquire_next_image(self.swapchain.clone(), None) {
                 Ok(r) => r,
@@ -330,7 +284,7 @@ impl Renderer {
             *recreate_swapchain = true;
         }
 
-        // wait for the fence related to this image to finish
+        // wait for the fence related to the acquired image to finish
         // normally this would be the oldest fence, that most likely have already
         // finished
         if let Some(image_fence) = &self.fences[image_i] {
@@ -349,12 +303,18 @@ impl Renderer {
             Some(fence) => fence.boxed(),
         };
 
+        let command_buffers = create_command_buffers(
+            self.device.clone(),
+            self.gfx_queue.clone(),
+            self.pipeline.clone(),
+            &self.framebuffers,
+            self.vertex_buffer.clone(),
+        )
+        .unwrap();
+
         let future = previous_future
             .join(acquire_future)
-            .then_execute(
-                self.gfx_queue.clone(),
-                self.command_buffers[image_i].clone(),
-            )
+            .then_execute(self.gfx_queue.clone(), command_buffers[image_i].clone())
             .unwrap()
             .then_swapchain_present(self.gfx_queue.clone(), self.swapchain.clone(), image_i)
             .then_signal_fence_and_flush();
@@ -375,11 +335,13 @@ impl Renderer {
     }
 }
 
+type PhysicalDeviceResult<'a> = Result<(PhysicalDevice<'a>, QueueFamily<'a>), Box<dyn Error>>;
+
 pub fn select_physical_device<'a>(
     instance: &'a Arc<Instance>,
     surface: Arc<Surface<Window>>,
     device_extensions: &DeviceExtensions,
-) -> Result<(PhysicalDevice<'a>, QueueFamily<'a>), Box<dyn Error>> {
+) -> PhysicalDeviceResult<'a> {
     let (physical_device, queue_family) = PhysicalDevice::enumerate(instance)
         .filter(|&p| p.supported_extensions().is_superset_of(device_extensions))
         .filter_map(|p| {
@@ -399,8 +361,13 @@ pub fn select_physical_device<'a>(
     Ok((physical_device, queue_family))
 }
 
-type SwapchainResult =
-    Result<(Arc<Swapchain<Window>>, Vec<Arc<SwapchainImage<Window>>>), Box<dyn Error>>;
+type SwapchainResult = Result<
+    (
+        Arc<Swapchain<Window>>,
+        Vec<Arc<ImageView<SwapchainImage<Window>>>>,
+    ),
+    Box<dyn Error>,
+>;
 
 pub fn create_swapchain<'a>(
     physical_device: &PhysicalDevice,
@@ -433,13 +400,17 @@ pub fn create_swapchain<'a>(
         },
     )?;
 
+    let images = images
+        .iter()
+        .map(|img| ImageView::new_default(img.clone()).unwrap())
+        .collect::<Vec<Arc<ImageView<SwapchainImage<Window>>>>>();
+
     Ok((swapchain, images))
 }
 
-pub fn get_render_pass(
-    device: Arc<Device>,
-    swapchain: Arc<Swapchain<Window>>,
-) -> Result<Arc<RenderPass>, Box<dyn Error>> {
+type RenderPassResult = Result<Arc<RenderPass>, Box<dyn Error>>;
+
+pub fn get_render_pass(device: Arc<Device>, swapchain: Arc<Swapchain<Window>>) -> RenderPassResult {
     let rp = vulkano::single_pass_renderpass!(
         device,
         attachments: {
@@ -459,36 +430,49 @@ pub fn get_render_pass(
     Ok(rp)
 }
 
+type GraphicsPipelineResult = Result<Arc<GraphicsPipeline>, Box<dyn Error>>;
+
 pub fn create_graphics_pipeline(
     device: Arc<Device>,
     vs: Arc<ShaderModule>,
     fs: Arc<ShaderModule>,
     render_pass: Arc<RenderPass>,
-) -> Result<Arc<GraphicsPipeline>, Box<dyn Error>> {
+    dimensions: [u32; 2],
+) -> GraphicsPipelineResult {
     let p = GraphicsPipeline::start()
+        // define states
         .vertex_input_state(BuffersDefinition::new().vertex::<Vertex>())
-        .vertex_shader(vs.entry_point("main").unwrap(), ())
         .input_assembly_state(InputAssemblyState::new())
-        .viewport_state(ViewportState::viewport_dynamic_scissor_irrelevant())
+        .viewport_state(ViewportState::viewport_fixed_scissor_irrelevant([
+            Viewport {
+                origin: [0.0, 0.0],
+                dimensions: [dimensions[0] as f32, dimensions[1] as f32],
+                depth_range: 0.0..1.0,
+            },
+        ]))
+        // define shaders
+        .vertex_shader(vs.entry_point("main").unwrap(), ())
         .fragment_shader(fs.entry_point("main").unwrap(), ())
+        // define render pass
         .render_pass(Subpass::from(render_pass, 0).unwrap())
         .build(device)?;
 
     Ok(p)
 }
 
+type FramebuffersResult = Result<Vec<Arc<Framebuffer>>, Box<dyn Error>>;
+
 pub fn create_framebuffers(
-    images: &[Arc<SwapchainImage<Window>>],
+    image_views: &[Arc<ImageView<SwapchainImage<Window>>>],
     render_pass: Arc<RenderPass>,
-) -> Result<Vec<Arc<Framebuffer>>, Box<dyn Error>> {
-    let fbs = images
+) -> FramebuffersResult {
+    let fbs = image_views
         .iter()
-        .map(|image| {
-            let view = ImageView::new_default(image.clone()).unwrap();
+        .map(|view| {
             Framebuffer::new(
                 render_pass.clone(),
                 FramebufferCreateInfo {
-                    attachments: vec![view],
+                    attachments: vec![view.clone()],
                     ..Default::default()
                 },
             )
@@ -499,14 +483,17 @@ pub fn create_framebuffers(
     Ok(fbs)
 }
 
+type CommandbuffersResult = Result<Vec<Arc<PrimaryAutoCommandBuffer>>, Box<dyn Error>>;
+
+// create a command buffer for each framebuffer
 pub fn create_command_buffers(
     device: Arc<Device>,
     queue: Arc<Queue>,
     pipeline: Arc<GraphicsPipeline>,
     framebuffers: &[Arc<Framebuffer>],
     vertex_buffer: Arc<CpuAccessibleBuffer<[Vertex]>>,
-    viewport: Viewport,
-) -> Result<Vec<Arc<PrimaryAutoCommandBuffer>>, Box<dyn Error>> {
+) -> CommandbuffersResult {
+    let clear_value = [0.0, 0.0, 1.0, 1.0];
     let fbs = framebuffers
         .iter()
         // cant get rid of unwraps when using map...
@@ -515,7 +502,7 @@ pub fn create_command_buffers(
                 device.clone(),
                 queue.family(),
                 // don't forget to write the correct buffer usage
-                CommandBufferUsage::MultipleSubmit,
+                CommandBufferUsage::OneTimeSubmit,
             )
             .unwrap();
 
@@ -523,12 +510,11 @@ pub fn create_command_buffers(
                 .begin_render_pass(
                     framebuffer.clone(),
                     SubpassContents::Inline,
-                    vec![[0.0, 0.0, 1.0, 1.0].into()],
+                    vec![clear_value.into()],
                 )
                 .unwrap()
                 .bind_pipeline_graphics(pipeline.clone())
                 .bind_vertex_buffers(0, vertex_buffer.clone())
-                .set_viewport(0, [viewport.clone()])
                 .draw(vertex_buffer.clone().len() as u32, 1, 0, 0)
                 .unwrap()
                 .end_render_pass()
@@ -539,4 +525,21 @@ pub fn create_command_buffers(
         .collect();
 
     Ok(fbs)
+}
+
+type PipelineResult = Result<(Arc<GraphicsPipeline>, Vec<Arc<Framebuffer>>), Box<dyn Error>>;
+
+fn window_size_dependent_setup(
+    device: Arc<Device>,
+    vs: Arc<ShaderModule>,
+    fs: Arc<ShaderModule>,
+    images: &[Arc<ImageView<SwapchainImage<Window>>>],
+    render_pass: Arc<RenderPass>,
+) -> PipelineResult {
+    let dimensions = images[0].image().dimensions().width_height();
+
+    let framebuffers = create_framebuffers(images, render_pass.clone())?;
+    let pipeline = create_graphics_pipeline(device, vs, fs, render_pass, dimensions)?;
+
+    Ok((pipeline, framebuffers))
 }
