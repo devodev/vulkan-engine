@@ -4,6 +4,7 @@ use vulkano::buffer::{BufferContents, BufferUsage, CpuAccessibleBuffer};
 
 use super::Device;
 
+#[allow(dead_code)]
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
 #[allow(dead_code)]
@@ -26,6 +27,7 @@ impl<T> Buffer<[T]>
 where
     [T]: BufferContents,
 {
+    #[allow(dead_code)]
     pub fn create<I>(device: &Device, typ: BufferType, data: I) -> Result<Arc<Buffer<[T]>>>
     where
         I: IntoIterator<Item = T>,

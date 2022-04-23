@@ -3,7 +3,7 @@ use std::result;
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
-use vulkano::buffer::TypedBufferAccess;
+use vulkano::buffer::{BufferUsage, ImmutableBuffer, TypedBufferAccess};
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferExecFuture, CommandBufferUsage,
     PrimaryAutoCommandBuffer, SubpassContents,
@@ -19,7 +19,6 @@ use vulkano::sync::{FenceSignalFuture, FlushError, GpuFuture, JoinFuture};
 use vulkano::{swapchain, sync};
 use winit::window::Window;
 
-use super::buffer::{Buffer, BufferType};
 use super::shader::{Shader, ShaderType};
 use crate::render::{Device, DeviceDefinition};
 
@@ -118,9 +117,8 @@ type Fences = Vec<
 pub struct Renderer {
     device: Device,
 
-    // triangle graphics context
-    vertex_buffer: Arc<Buffer<[QuadVertex]>>,
-    index_buffer: Arc<Buffer<[u32]>>,
+    vertex_buffer: Arc<ImmutableBuffer<[QuadVertex]>>,
+    index_buffer: Arc<ImmutableBuffer<[u32]>>,
     vertex_shader: Arc<Shader>,
     fragment_shader: Arc<Shader>,
     pipeline: Arc<GraphicsPipeline>,
@@ -144,9 +142,20 @@ impl Renderer {
         let vertices = QUAD_VERTICES
             .into_iter()
             .map(|qv| QuadVertex::new(qv, [1.0, 0.0, 0.0, 1.0]));
+        let (vertex_buffer, vb_future) = ImmutableBuffer::from_iter(
+            vertices,
+            BufferUsage::vertex_buffer_transfer_dst(),
+            device.queues[0].clone(),
+        )?;
+        // create index buffer (quad)
+        let (index_buffer, ib_future) = ImmutableBuffer::from_iter(
+            QUAD_INDICES,
+            BufferUsage::index_buffer_transfer_dst(),
+            device.queues[0].clone(),
+        )?;
 
-        let vertex_buffer = Buffer::create(&device, BufferType::Vertex, vertices)?;
-        let index_buffer = Buffer::create(&device, BufferType::Index, QUAD_INDICES)?;
+        // wait for both buffer copy to finish
+        vb_future.join(ib_future).flush()?;
 
         // load shaders
         let vertex_shader = Shader::create(&device, ShaderType::Vertex, vs::load)?;
@@ -248,10 +257,10 @@ impl Renderer {
             )
             .unwrap()
             .bind_pipeline_graphics(self.pipeline.clone())
-            .bind_vertex_buffers(0, self.vertex_buffer.buffer.clone())
-            .bind_index_buffer(self.index_buffer.buffer.clone())
+            .bind_vertex_buffers(0, self.vertex_buffer.clone())
+            .bind_index_buffer(self.index_buffer.clone())
             // first vertex index == firstIndex × indexSize + offset
-            .draw_indexed(self.index_buffer.buffer.clone().len() as u32, 1, 0, 0, 0)
+            .draw_indexed(self.index_buffer.clone().len() as u32, 1, 0, 0, 0)
             .unwrap()
             .end_render_pass()
             .unwrap();
