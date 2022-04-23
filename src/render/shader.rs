@@ -11,27 +11,22 @@ pub type ShaderLoadable =
         device: Arc<vulkano::device::Device>,
     ) -> result::Result<Arc<ShaderModule>, vulkano::shader::ShaderCreationError>;
 
+#[derive(Debug, Clone, Copy)]
 pub enum ShaderType {
     Fragment,
     Vertex,
 }
 
+#[derive(Debug, Clone)]
 pub struct Shader {
     pub typ: ShaderType,
     pub shader: Arc<ShaderModule>,
 }
 
 impl Shader {
-    pub fn vertex(device: &Device, load: ShaderLoadable) -> Result<Arc<Self>> {
+    pub fn create(device: &Device, typ: ShaderType, load: ShaderLoadable) -> Result<Arc<Self>> {
         Ok(Arc::new(Self {
-            typ: ShaderType::Vertex,
-            shader: load(device.device.clone())?,
-        }))
-    }
-
-    pub fn fragment(device: &Device, load: ShaderLoadable) -> Result<Arc<Self>> {
-        Ok(Arc::new(Self {
-            typ: ShaderType::Fragment,
+            typ,
             shader: load(device.device.clone())?,
         }))
     }

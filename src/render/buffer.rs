@@ -6,10 +6,14 @@ use super::Device;
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
 pub enum BufferType {
+    Index,
     Vertex,
 }
 
+#[derive(Debug, Clone)]
 pub struct Buffer<T>
 where
     T: BufferContents + ?Sized,
@@ -22,23 +26,21 @@ impl<T> Buffer<[T]>
 where
     [T]: BufferContents,
 {
-    pub fn vertex<I>(device: &Device, data: I) -> Result<Arc<Buffer<[T]>>>
+    pub fn create<I>(device: &Device, typ: BufferType, data: I) -> Result<Arc<Buffer<[T]>>>
     where
         I: IntoIterator<Item = T>,
-        <I as std::iter::IntoIterator>::IntoIter: std::iter::ExactSizeIterator,
+        I::IntoIter: ExactSizeIterator,
     {
-        let cpu_buffer = CpuAccessibleBuffer::from_iter::<I>(
-            device.device.clone(),
-            BufferUsage::vertex_buffer(),
-            false,
-            data,
-        )?;
-
-        let b = Self {
-            typ: BufferType::Vertex,
-            buffer: cpu_buffer,
+        let usage = match typ {
+            BufferType::Index => BufferUsage::index_buffer(),
+            BufferType::Vertex => BufferUsage::vertex_buffer(),
         };
+        let cpu_buffer =
+            CpuAccessibleBuffer::from_iter::<I>(device.device.clone(), usage, false, data)?;
 
-        Ok(Arc::new(b))
+        Ok(Arc::new(Self {
+            typ,
+            buffer: cpu_buffer,
+        }))
     }
 }

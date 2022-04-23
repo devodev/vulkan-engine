@@ -21,8 +21,8 @@ use vulkano::sync::{FenceSignalFuture, FlushError, GpuFuture, JoinFuture};
 use vulkano::{swapchain, sync};
 use winit::window::Window;
 
-use super::buffer::Buffer;
-use super::shader::Shader;
+use super::buffer::{Buffer, BufferType};
+use super::shader::{Shader, ShaderType};
 use crate::render::{Device, DeviceDefinition};
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
@@ -114,8 +114,9 @@ impl Renderer {
         // -----------------------------------------------------------------------------------
 
         // create vertex buffer (triangle)
-        let vertex_buffer = Buffer::vertex(
+        let vertex_buffer = Buffer::create(
             &device,
+            BufferType::Vertex,
             vec![
                 Vertex::new([-0.5, -0.5]),
                 Vertex::new([0.0, 0.5]),
@@ -125,8 +126,8 @@ impl Renderer {
         )?;
 
         // load shaders
-        let vertex_shader = Shader::vertex(&device, vs::load)?;
-        let fragment_shader = Shader::fragment(&device, fs::load)?;
+        let vertex_shader = Shader::create(&device, ShaderType::Vertex, vs::load)?;
+        let fragment_shader = Shader::create(&device, ShaderType::Fragment, fs::load)?;
 
         // create actual pipeline
         let pipeline = create_graphics_pipeline(
