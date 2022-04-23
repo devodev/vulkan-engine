@@ -178,8 +178,8 @@ impl Renderer {
 
     pub fn end(&mut self) {
         if self.should_recreate_swapchain {
-            self.should_recreate_swapchain = false;
             self.recreate_swapchain();
+            self.should_recreate_swapchain = false;
         }
 
         // acquire next image from swapchain
@@ -194,7 +194,6 @@ impl Renderer {
             };
         if suboptimal {
             self.should_recreate_swapchain = true;
-            return;
         }
 
         // wait for the fence related to the acquired image to finish
