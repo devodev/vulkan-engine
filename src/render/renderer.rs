@@ -144,8 +144,8 @@ impl Renderer {
         let vertices = QUAD_VERTICES
             .into_iter()
             .map(|qv| QuadVertex::new(qv, [1.0, 0.0, 0.0, 1.0]));
-        let vertex_buffer = Buffer::create(&device, BufferType::Vertex, vertices)?;
 
+        let vertex_buffer = Buffer::create(&device, BufferType::Vertex, vertices)?;
         let index_buffer = Buffer::create(&device, BufferType::Index, QUAD_INDICES)?;
 
         // load shaders
@@ -229,13 +229,13 @@ impl Renderer {
             Some(fence) => fence.boxed(),
         };
 
+        // create command buffer
         let gfx_queue = self.device.queues[0].clone();
 
-        // create command buffer
         let mut cb_builder = AutoCommandBufferBuilder::primary(
             self.device.device.clone(),
             gfx_queue.family(),
-            // don't forget to write the correct buffer usage
+            // since we are creating a command buffer each frame, set to one-time submit
             CommandBufferUsage::OneTimeSubmit,
         )
         .unwrap();
@@ -258,6 +258,9 @@ impl Renderer {
         // put command_buffer in Arc to be able to store the future in self.fences
         let command_buffer = Arc::new(cb_builder.build().unwrap());
 
+        // synchronize previous ssubmission with current which will execute our command
+        // buffer and present the swapchain. It returns a fence future that will be
+        // signaled when this has completed
         let future = previous_future
             .join(acquire_future)
             .then_execute(gfx_queue.clone(), command_buffer)
@@ -265,6 +268,7 @@ impl Renderer {
             .then_swapchain_present(gfx_queue, self.device.swapchain.clone(), image_i)
             .then_signal_fence_and_flush();
 
+        // store fence future for next frame
         self.fences[image_i] = match future {
             Ok(value) => Some(Arc::new(value)),
             Err(FlushError::OutOfDate) => {
@@ -303,9 +307,12 @@ fn create_graphics_pipeline(
     dimensions: [u32; 2],
 ) -> GraphicsPipelineResult {
     let p = GraphicsPipeline::start()
-        // define states
+        // defines how to handle vertex data provided by our vertex buffer (data layout)
         .vertex_input_state(BuffersDefinition::new().vertex::<QuadVertex>())
+        // defines how the device should assemble primitives (vertices and instances)
+        // default is TRIANGLE_LIST
         .input_assembly_state(InputAssemblyState::new())
+        // defines the region of the framebuffer that the output will be rendered to
         .viewport_state(ViewportState::viewport_fixed_scissor_irrelevant([
             Viewport {
                 origin: [0.0, 0.0],
