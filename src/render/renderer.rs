@@ -194,6 +194,7 @@ impl Renderer {
             };
         if suboptimal {
             self.should_recreate_swapchain = true;
+            return;
         }
 
         // wait for the fence related to the acquired image to finish
