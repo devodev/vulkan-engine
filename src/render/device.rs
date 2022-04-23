@@ -110,8 +110,9 @@ impl Device {
         // create render pass
         // -----------------------------------------------------------------------------------
 
+        // these two steps are expensive and should be performed a minimum amount of
+        // time.
         let render_pass = create_render_pass(device.clone(), swapchain.clone())?;
-
         let framebuffers = create_framebuffers(&image_views, render_pass.clone())?;
 
         Ok(Self {
