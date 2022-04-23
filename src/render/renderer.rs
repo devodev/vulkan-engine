@@ -8,12 +8,11 @@ use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferExecFuture, CommandBufferUsage,
     PrimaryAutoCommandBuffer, SubpassContents,
 };
-use vulkano::device::Queue;
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::vertex_input::BuffersDefinition;
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
 use vulkano::pipeline::GraphicsPipeline;
-use vulkano::render_pass::{Framebuffer, RenderPass, Subpass};
+use vulkano::render_pass::{RenderPass, Subpass};
 use vulkano::shader::ShaderModule;
 use vulkano::swapchain::{AcquireError, PresentFuture, SwapchainAcquireFuture};
 use vulkano::sync::{FenceSignalFuture, FlushError, GpuFuture, JoinFuture};
@@ -204,15 +203,30 @@ impl Renderer {
 
         let gfx_queue = self.device.queues[0].clone();
 
-        let command_buffer = create_command_buffer(
+        // create command buffer
+        let mut cb_builder = AutoCommandBufferBuilder::primary(
             self.device.device.clone(),
-            gfx_queue.clone(),
-            self.pipeline.clone(),
-            self.device.framebuffers[image_i].clone(),
-            self.vertex_buffer.clone(),
-            self.background_color,
+            gfx_queue.family(),
+            // don't forget to write the correct buffer usage
+            CommandBufferUsage::OneTimeSubmit,
         )
         .unwrap();
+
+        cb_builder
+            .begin_render_pass(
+                self.device.framebuffers[image_i].clone(),
+                SubpassContents::Inline,
+                vec![self.background_color.into()],
+            )
+            .unwrap()
+            .bind_pipeline_graphics(self.pipeline.clone())
+            .bind_vertex_buffers(0, self.vertex_buffer.buffer.clone())
+            .draw(self.vertex_buffer.buffer.clone().len() as u32, 1, 0, 0)
+            .unwrap()
+            .end_render_pass()
+            .unwrap();
+        // put command_buffer in Arc to be able to store the future in self.fences
+        let command_buffer = Arc::new(cb_builder.build().unwrap());
 
         let future = previous_future
             .join(acquire_future)
@@ -277,38 +291,4 @@ fn create_graphics_pipeline(
         .build(device)?;
 
     Ok(p)
-}
-
-type CommandbufferResult = Result<Arc<PrimaryAutoCommandBuffer>>;
-
-// create a command buffer for each framebuffer
-fn create_command_buffer(
-    device: Arc<vulkano::device::Device>,
-    queue: Arc<Queue>,
-    pipeline: Arc<GraphicsPipeline>,
-    framebuffer: Arc<Framebuffer>,
-    vertex_buffer: Arc<Buffer<[Vertex]>>,
-    clear_value: [f32; 4],
-) -> CommandbufferResult {
-    let mut cbbuilder = AutoCommandBufferBuilder::primary(
-        device,
-        queue.family(),
-        // don't forget to write the correct buffer usage
-        CommandBufferUsage::OneTimeSubmit,
-    )?;
-
-    cbbuilder
-        .begin_render_pass(
-            framebuffer,
-            SubpassContents::Inline,
-            vec![clear_value.into()],
-        )
-        .unwrap()
-        .bind_pipeline_graphics(pipeline)
-        .bind_vertex_buffers(0, vertex_buffer.buffer.clone())
-        .draw(vertex_buffer.buffer.clone().len() as u32, 1, 0, 0)?
-        .end_render_pass()?;
-
-    let fb = cbbuilder.build()?;
-    Ok(Arc::new(fb))
 }
