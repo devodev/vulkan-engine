@@ -97,6 +97,8 @@ void main() {
     }
 }
 
+const DEFAULT_BACKGROUND_COLOR: [f32; 4] = [0.0, 0.4, 1.0, 1.0];
+
 type Fences = Vec<
     Option<
         Arc<
@@ -179,7 +181,7 @@ impl Renderer {
             vertex_shader,
             fragment_shader,
             pipeline,
-            background_color: [0.0, 0.4, 1.0, 1.0],
+            background_color: DEFAULT_BACKGROUND_COLOR,
             should_recreate_swapchain: false,
             frames_in_flight,
             fences: vec![None; frames_in_flight],
