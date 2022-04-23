@@ -1,6 +1,5 @@
 mod buffer;
 mod device;
-mod pipeline;
 mod renderer;
 mod shader;
 
