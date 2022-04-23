@@ -95,6 +95,8 @@ pub struct Renderer {
     fragment_shader: Arc<Shader>,
     pipeline: Arc<GraphicsPipeline>,
 
+    background_color: [f32; 4],
+
     // window state
     should_recreate_swapchain: bool,
 
@@ -107,10 +109,6 @@ pub struct Renderer {
 impl Renderer {
     pub fn new(window: Window, debug_enabled: bool) -> Result<Self> {
         let device = Device::new(DeviceDefinition::new(window).with_debug_enabled(debug_enabled))?;
-
-        // -----------------------------------------------------------------------------------
-        // create graphics pipeline
-        // -----------------------------------------------------------------------------------
 
         // create vertex buffer (triangle)
         let vertex_buffer = Buffer::create(
@@ -128,7 +126,7 @@ impl Renderer {
         let vertex_shader = Shader::create(&device, ShaderType::Vertex, vs::load)?;
         let fragment_shader = Shader::create(&device, ShaderType::Fragment, fs::load)?;
 
-        // create actual pipeline
+        // create graphics pipeline
         let pipeline = create_graphics_pipeline(
             device.device.clone(),
             vertex_shader.shader.clone(),
@@ -138,22 +136,6 @@ impl Renderer {
         )
         .unwrap();
 
-        // -----------------------------------------------------------------------------------
-        // create command pool
-        // -----------------------------------------------------------------------------------
-
-        // NOTE: this is currently handled automatically by Vulkano when creating
-        //       command buffers. It will request the default command pool from
-        //       the provided device and queue family.
-        //       Ref: AutoCommandBufferBuilder::primary().
-
-        // -----------------------------------------------------------------------------------
-        // create command buffers
-        // -----------------------------------------------------------------------------------
-
-        // NOTE: Created every frame in the event loop
-        //
-
         let frames_in_flight = device.image_views.len();
         let r = Renderer {
             device,
@@ -161,6 +143,7 @@ impl Renderer {
             vertex_shader,
             fragment_shader,
             pipeline,
+            background_color: [0.0, 0.4, 1.0, 1.0],
             should_recreate_swapchain: false,
             frames_in_flight,
             fences: vec![None; frames_in_flight],
@@ -168,6 +151,11 @@ impl Renderer {
         };
 
         Ok(r)
+    }
+
+    #[allow(dead_code)]
+    pub fn set_background_color(&mut self, c: [f32; 4]) {
+        self.background_color = c;
     }
 
     pub fn window_resized(&mut self) {
@@ -208,7 +196,6 @@ impl Renderer {
             None => {
                 let mut now = sync::now(self.device.device.clone());
                 now.cleanup_finished();
-
                 now.boxed()
             }
             // Use the existing FenceSignalFuture
@@ -223,6 +210,7 @@ impl Renderer {
             self.pipeline.clone(),
             self.device.framebuffers[image_i].clone(),
             self.vertex_buffer.clone(),
+            self.background_color,
         )
         .unwrap();
 
@@ -300,8 +288,8 @@ fn create_command_buffer(
     pipeline: Arc<GraphicsPipeline>,
     framebuffer: Arc<Framebuffer>,
     vertex_buffer: Arc<Buffer<[Vertex]>>,
+    clear_value: [f32; 4],
 ) -> CommandbufferResult {
-    let clear_value = [0.0, 0.0, 1.0, 1.0];
     let mut cbbuilder = AutoCommandBufferBuilder::primary(
         device,
         queue.family(),
