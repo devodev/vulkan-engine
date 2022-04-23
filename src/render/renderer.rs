@@ -97,7 +97,7 @@ pub struct Renderer {
     pipeline: Arc<GraphicsPipeline>,
 
     // window state
-    recreate_swapchain: bool,
+    should_recreate_swapchain: bool,
 
     // event_loop state
     frames_in_flight: usize,
@@ -162,7 +162,7 @@ impl Renderer {
             vertex_shader,
             fragment_shader,
             pipeline,
-            recreate_swapchain: false,
+            should_recreate_swapchain: false,
             frames_in_flight,
             fences: vec![None; frames_in_flight],
             previous_fence_i: 0,
@@ -172,29 +172,15 @@ impl Renderer {
     }
 
     pub fn window_resized(&mut self) {
-        self.recreate_swapchain = true;
+        self.should_recreate_swapchain = true;
     }
 
     pub fn begin(&self) {}
 
     pub fn end(&mut self) {
-        if self.recreate_swapchain {
-            self.recreate_swapchain = false;
-
-            self.device.recreate_swapchain().unwrap();
-
-            let dimensions = self.device.image_views[0]
-                .image()
-                .dimensions()
-                .width_height();
-            self.pipeline = create_graphics_pipeline(
-                self.device.device.clone(),
-                self.vertex_shader.shader.clone(),
-                self.fragment_shader.shader.clone(),
-                self.device.render_pass.clone(),
-                dimensions,
-            )
-            .unwrap();
+        if self.should_recreate_swapchain {
+            self.should_recreate_swapchain = false;
+            self.recreate_swapchain();
         }
 
         // acquire next image from swapchain
@@ -202,13 +188,13 @@ impl Renderer {
             match swapchain::acquire_next_image(self.device.swapchain.clone(), None) {
                 Ok(r) => r,
                 Err(AcquireError::OutOfDate) => {
-                    self.recreate_swapchain = true;
+                    self.should_recreate_swapchain = true;
                     return;
                 }
                 Err(e) => panic!("Failed to acquire next image: {:?}", e),
             };
         if suboptimal {
-            self.recreate_swapchain = true;
+            self.should_recreate_swapchain = true;
         }
 
         // wait for the fence related to the acquired image to finish
@@ -251,7 +237,7 @@ impl Renderer {
         self.fences[image_i] = match future {
             Ok(value) => Some(Arc::new(value)),
             Err(FlushError::OutOfDate) => {
-                self.recreate_swapchain = true;
+                self.should_recreate_swapchain = true;
                 None
             }
             Err(e) => {
@@ -261,6 +247,18 @@ impl Renderer {
         };
 
         self.previous_fence_i = image_i;
+    }
+
+    fn recreate_swapchain(&mut self) {
+        self.device.recreate_swapchain().unwrap();
+        self.pipeline = create_graphics_pipeline(
+            self.device.device.clone(),
+            self.vertex_shader.shader.clone(),
+            self.fragment_shader.shader.clone(),
+            self.device.render_pass.clone(),
+            self.device.dimensions(),
+        )
+        .unwrap();
     }
 }
 
@@ -309,23 +307,23 @@ fn create_command_buffers(
         .iter()
         // cant get rid of unwraps when using map...
         .map(|framebuffer| {
-            let mut cbbuilder = AutoCommandBufferBuilder::primary(
+    let mut cbbuilder = AutoCommandBufferBuilder::primary(
                 device.clone(),
-                queue.family(),
-                // don't forget to write the correct buffer usage
-                CommandBufferUsage::OneTimeSubmit,
+        queue.family(),
+        // don't forget to write the correct buffer usage
+        CommandBufferUsage::OneTimeSubmit,
             )
             .unwrap();
 
-            cbbuilder
-                .begin_render_pass(
+    cbbuilder
+        .begin_render_pass(
                     framebuffer.clone(),
-                    SubpassContents::Inline,
-                    vec![clear_value.into()],
-                )
-                .unwrap()
+            SubpassContents::Inline,
+            vec![clear_value.into()],
+        )
+        .unwrap()
                 .bind_pipeline_graphics(pipeline.clone())
-                .bind_vertex_buffers(0, vertex_buffer.buffer.clone())
+        .bind_vertex_buffers(0, vertex_buffer.buffer.clone())
                 .draw(vertex_buffer.buffer.clone().len() as u32, 1, 0, 0)
                 .unwrap()
                 .end_render_pass()
