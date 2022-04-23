@@ -27,20 +27,36 @@ type Result<T> = result::Result<T, Box<dyn Error>>;
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, Zeroable, Pod)]
-pub struct Vertex {
+pub struct QuadVertex {
     pub position: [f32; 3],
     pub color: [f32; 4],
 }
-vulkano::impl_vertex!(Vertex, position, color);
+vulkano::impl_vertex!(QuadVertex, position, color);
 
-impl Vertex {
+impl QuadVertex {
     pub fn new(pos: [f32; 3], col: [f32; 4]) -> Self {
-        Vertex {
+        QuadVertex {
             position: pos,
             color: col,
         }
     }
 }
+
+// NOTE: Vulkan 0.0 is top-left corner
+//
+// 0 +--------------+ 1
+//   |              |
+//   |              |
+//   |              |
+// 3 +--------------+ 2
+//
+const QUAD_INDICES: [u32; 6] = [0, 1, 2, 2, 3, 0];
+const QUAD_VERTICES: [[f32; 3]; 4] = [
+    [-0.5, 0.5, 0.0],
+    [-0.5, -0.5, 0.0],
+    [0.5, -0.5, 0.0],
+    [0.5, 0.5, 0.0],
+];
 
 #[allow(clippy::needless_question_mark)]
 pub mod vs {
@@ -103,7 +119,8 @@ pub struct Renderer {
     device: Device,
 
     // triangle graphics context
-    vertex_buffer: Arc<Buffer<[Vertex]>>,
+    vertex_buffer: Arc<Buffer<[QuadVertex]>>,
+    index_buffer: Arc<Buffer<[u32]>>,
     vertex_shader: Arc<Shader>,
     fragment_shader: Arc<Shader>,
     pipeline: Arc<GraphicsPipeline>,
@@ -123,17 +140,13 @@ impl Renderer {
     pub fn new(window: Window, debug_enabled: bool) -> Result<Self> {
         let device = Device::new(DeviceDefinition::new(window).with_debug_enabled(debug_enabled))?;
 
-        // create vertex buffer (triangle)
-        let vertex_buffer = Buffer::create(
-            &device,
-            BufferType::Vertex,
-            vec![
-                Vertex::new([-0.5, -0.5, 0.0], [2.0, 0.0, 0.0, 1.0]),
-                Vertex::new([0.0, 0.5, 0.0], [0.0, 1.0, 0.0, 1.0]),
-                Vertex::new([0.5, -0.25, 0.0], [0.0, 0.0, 0.5, 1.0]),
-            ]
-            .into_iter(),
-        )?;
+        // create vertex buffer (quad)
+        let vertices = QUAD_VERTICES
+            .into_iter()
+            .map(|qv| QuadVertex::new(qv, [1.0, 0.0, 0.0, 1.0]));
+        let vertex_buffer = Buffer::create(&device, BufferType::Vertex, vertices)?;
+
+        let index_buffer = Buffer::create(&device, BufferType::Index, QUAD_INDICES)?;
 
         // load shaders
         let vertex_shader = Shader::create(&device, ShaderType::Vertex, vs::load)?;
@@ -153,6 +166,7 @@ impl Renderer {
         let r = Renderer {
             device,
             vertex_buffer,
+            index_buffer,
             vertex_shader,
             fragment_shader,
             pipeline,
@@ -235,7 +249,9 @@ impl Renderer {
             .unwrap()
             .bind_pipeline_graphics(self.pipeline.clone())
             .bind_vertex_buffers(0, self.vertex_buffer.buffer.clone())
-            .draw(self.vertex_buffer.buffer.clone().len() as u32, 1, 0, 0)
+            .bind_index_buffer(self.index_buffer.buffer.clone())
+            // first vertex index == firstIndex × indexSize + offset
+            .draw_indexed(self.index_buffer.buffer.clone().len() as u32, 1, 0, 0, 0)
             .unwrap()
             .end_render_pass()
             .unwrap();
@@ -288,7 +304,7 @@ fn create_graphics_pipeline(
 ) -> GraphicsPipelineResult {
     let p = GraphicsPipeline::start()
         // define states
-        .vertex_input_state(BuffersDefinition::new().vertex::<Vertex>())
+        .vertex_input_state(BuffersDefinition::new().vertex::<QuadVertex>())
         .input_assembly_state(InputAssemblyState::new())
         .viewport_state(ViewportState::viewport_fixed_scissor_irrelevant([
             Viewport {
