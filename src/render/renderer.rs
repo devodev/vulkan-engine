@@ -28,13 +28,17 @@ type Result<T> = result::Result<T, Box<dyn Error>>;
 #[repr(C)]
 #[derive(Default, Copy, Clone, Zeroable, Pod)]
 pub struct Vertex {
-    pub position: [f32; 2],
+    pub position: [f32; 3],
+    pub color: [f32; 4],
 }
-vulkano::impl_vertex!(Vertex, position);
+vulkano::impl_vertex!(Vertex, position, color);
 
 impl Vertex {
-    pub fn new(pos: [f32; 2]) -> Self {
-        Vertex { position: pos }
+    pub fn new(pos: [f32; 3], col: [f32; 4]) -> Self {
+        Vertex {
+            position: pos,
+            color: col,
+        }
     }
 }
 
@@ -45,10 +49,16 @@ pub mod vs {
         src: "
 #version 450
 
-layout(location = 0) in vec2 position;
+// inputs
+layout(location = 0) in vec3 position;
+layout(location = 1) in vec4 color;
+
+// outputs
+layout(location = 0) out vec4 frag_Color;
 
 void main() {
-    gl_Position = vec4(position, 0.0, 1.0);
+    frag_Color = color;
+    gl_Position = vec4(position, 1.0);
 }"
     }
 }
@@ -60,10 +70,14 @@ pub mod fs {
         src: "
 #version 450
 
+// inputs
+layout(location = 0) in vec4 frag_Color;
+
+// outputs
 layout(location = 0) out vec4 f_color;
 
 void main() {
-    f_color = vec4(1.0, 0.0, 0.0, 1.0);
+    f_color = frag_Color;
 }"
     }
 }
@@ -114,9 +128,9 @@ impl Renderer {
             &device,
             BufferType::Vertex,
             vec![
-                Vertex::new([-0.5, -0.5]),
-                Vertex::new([0.0, 0.5]),
-                Vertex::new([0.5, -0.25]),
+                Vertex::new([-0.5, -0.5, 0.0], [2.0, 0.0, 0.0, 1.0]),
+                Vertex::new([0.0, 0.5, 0.0], [0.0, 1.0, 0.0, 1.0]),
+                Vertex::new([0.5, -0.25, 0.0], [0.0, 0.0, 0.5, 1.0]),
             ]
             .into_iter(),
         )?;
