@@ -115,7 +115,6 @@ type Fences = Vec<
     >,
 >;
 
-#[allow(dead_code)]
 pub struct Renderer {
     device: Device,
 
@@ -131,7 +130,6 @@ pub struct Renderer {
     should_recreate_swapchain: bool,
 
     // event_loop state
-    frames_in_flight: usize,
     fences: Fences,
     previous_fence_i: usize,
 }
@@ -186,7 +184,6 @@ impl Renderer {
             pipeline,
             background_color: DEFAULT_BACKGROUND_COLOR,
             should_recreate_swapchain: false,
-            frames_in_flight,
             fences: vec![None; frames_in_flight],
             previous_fence_i: 0,
         };
