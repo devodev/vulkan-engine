@@ -1,4 +1,4 @@
-use std::{error::Error, result};
+use std::{error::Error, result, sync::Arc};
 
 use gameloop::GameLoop;
 use log::debug;
@@ -125,7 +125,7 @@ impl Engine {
         let (event_loop, window) = self.init_window()?;
 
         // renderer
-        self.init_renderer(window)?;
+        self.init_renderer(window.clone())?;
         let mut renderer = self
             .renderer
             .take()
@@ -153,8 +153,8 @@ impl Engine {
                 renderer.window_resized();
             }
             Event::MainEventsCleared => {
-                // NOTE: the MainEventsCleared event "will be emitted when all input events
-                //       have been processed and redraw processing is about to begin".
+            // NOTE: the MainEventsCleared event "will be emitted when all input events
+            //       have been processed and redraw processing is about to begin".
                 for action in game_loop.actions() {
                     match action {
                         gameloop::FrameAction::Tick => {
@@ -172,7 +172,7 @@ impl Engine {
         });
     }
 
-    fn init_window(&mut self) -> Result<(EventLoop<()>, Window)> {
+    fn init_window(&mut self) -> Result<(EventLoop<()>, Arc<Window>)> {
         debug!("init_window");
         let event_loop = EventLoop::new();
         let window = self
@@ -181,10 +181,10 @@ impl Engine {
             .ok_or("window_builder is None")?
             .build(&event_loop)?;
 
-        Ok((event_loop, window))
+        Ok((event_loop, Arc::new(window)))
     }
 
-    fn init_renderer(&mut self, window: Window) -> Result<()> {
+    fn init_renderer(&mut self, window: Arc<Window>) -> Result<()> {
         debug!("init_renderer");
 
         let renderer = Renderer::new(window, self.renderer_debug)?;

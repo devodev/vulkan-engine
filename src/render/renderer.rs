@@ -105,10 +105,10 @@ type Fences = Vec<
             FenceSignalFuture<
                 PresentFuture<
                     CommandBufferExecFuture<
-                        JoinFuture<Box<dyn GpuFuture>, SwapchainAcquireFuture<Window>>,
+                        JoinFuture<Box<dyn GpuFuture>, SwapchainAcquireFuture<Arc<Window>>>,
                         Arc<PrimaryAutoCommandBuffer>,
                     >,
-                    Window,
+                    Arc<Window>,
                 >,
             >,
         >,
@@ -137,8 +137,11 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(window: Window, debug_enabled: bool) -> Result<Self> {
+    pub fn new(window: Arc<Window>, debug_enabled: bool) -> Result<Self> {
         let device = Device::new(DeviceDefinition::new(window).with_debug_enabled(debug_enabled))?;
+
+        // TODO: create vertex/index buffers every frame
+        //       to start planning for batch rendering
 
         // create vertex buffer (quad)
         let vertices = QUAD_VERTICES

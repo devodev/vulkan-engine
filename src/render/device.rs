@@ -24,12 +24,12 @@ use winit::window::Window;
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
 pub struct DeviceDefinition {
-    window: Window,
+    window: Arc<Window>,
     enable_debug: bool,
 }
 
 impl DeviceDefinition {
-    pub fn new(window: Window) -> Self {
+    pub fn new(window: Arc<Window>) -> Self {
         Self {
             window,
             enable_debug: false,
@@ -44,11 +44,11 @@ impl DeviceDefinition {
 
 pub struct Device {
     pub instance: Arc<Instance>,
-    pub surface: Arc<Surface<Window>>,
+    pub surface: Arc<Surface<Arc<Window>>>,
     pub device: Arc<vulkano::device::Device>,
     pub queues: Vec<Arc<Queue>>,
-    pub swapchain: Arc<Swapchain<Window>>,
-    pub image_views: Vec<Arc<ImageView<SwapchainImage<Window>>>>,
+    pub swapchain: Arc<Swapchain<Arc<Window>>>,
+    pub image_views: Vec<Arc<ImageView<SwapchainImage<Arc<Window>>>>>,
     pub render_pass: Arc<RenderPass>,
     pub framebuffers: Vec<Arc<Framebuffer>>,
 
@@ -148,7 +148,7 @@ impl Device {
         let new_images = new_images
             .iter()
             .map(|img| ImageView::new_default(img.clone()).unwrap())
-            .collect::<Vec<Arc<ImageView<SwapchainImage<Window>>>>>();
+            .collect::<Vec<Arc<ImageView<SwapchainImage<Arc<Window>>>>>>();
 
         self.framebuffers = create_framebuffers(&new_images, self.render_pass.clone())?;
         self.image_views = new_images;
@@ -228,7 +228,7 @@ type PhysicalDeviceResult<'a> = Result<(PhysicalDevice<'a>, QueueFamily<'a>)>;
 
 fn select_physical_device<'a>(
     instance: &'a Arc<Instance>,
-    surface: Arc<Surface<Window>>,
+    surface: Arc<Surface<Arc<Window>>>,
     device_extensions: &DeviceExtensions,
 ) -> PhysicalDeviceResult<'a> {
     let (physical_device, queue_family) = PhysicalDevice::enumerate(instance)
@@ -251,14 +251,14 @@ fn select_physical_device<'a>(
 }
 
 type SwapchainResult = Result<(
-    Arc<Swapchain<Window>>,
-    Vec<Arc<ImageView<SwapchainImage<Window>>>>,
+    Arc<Swapchain<Arc<Window>>>,
+    Vec<Arc<ImageView<SwapchainImage<Arc<Window>>>>>,
 )>;
 
 fn create_swapchain<'a>(
     physical_device: &PhysicalDevice,
     device: &'a Arc<vulkano::device::Device>,
-    surface: Arc<Surface<Window>>,
+    surface: Arc<Surface<Arc<Window>>>,
 ) -> SwapchainResult {
     let device_caps = physical_device.surface_capabilities(&surface, Default::default())?;
     let dimensions = surface.window().inner_size();
@@ -289,7 +289,7 @@ fn create_swapchain<'a>(
     let images = images
         .iter()
         .map(|img| ImageView::new_default(img.clone()).unwrap())
-        .collect::<Vec<Arc<ImageView<SwapchainImage<Window>>>>>();
+        .collect::<Vec<Arc<ImageView<SwapchainImage<Arc<Window>>>>>>();
 
     Ok((swapchain, images))
 }
@@ -298,7 +298,7 @@ type RenderPassResult = Result<Arc<RenderPass>>;
 
 fn create_render_pass(
     device: Arc<vulkano::device::Device>,
-    swapchain: Arc<Swapchain<Window>>,
+    swapchain: Arc<Swapchain<Arc<Window>>>,
 ) -> RenderPassResult {
     let rp = vulkano::single_pass_renderpass!(
         device,
@@ -322,7 +322,7 @@ fn create_render_pass(
 type FramebuffersResult = Result<Vec<Arc<Framebuffer>>>;
 
 fn create_framebuffers(
-    image_views: &[Arc<ImageView<SwapchainImage<Window>>>],
+    image_views: &[Arc<ImageView<SwapchainImage<Arc<Window>>>>],
     render_pass: Arc<RenderPass>,
 ) -> FramebuffersResult {
     let fbs = image_views
