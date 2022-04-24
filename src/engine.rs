@@ -1,4 +1,4 @@
-use std::{error::Error, result};
+use std::{error::Error, result, sync::Arc};
 
 use gameloop::GameLoop;
 use log::debug;
@@ -172,7 +172,7 @@ impl Engine {
         });
     }
 
-    fn init_window(&mut self) -> Result<(EventLoop<()>, Window)> {
+    fn init_window(&mut self) -> Result<(EventLoop<()>, Arc<Window>)> {
         debug!("init_window");
         let event_loop = EventLoop::new();
         let window = self
@@ -181,10 +181,10 @@ impl Engine {
             .ok_or("window_builder is None")?
             .build(&event_loop)?;
 
-        Ok((event_loop, window))
+        Ok((event_loop, Arc::new(window)))
     }
 
-    fn init_renderer(&mut self, window: Window) -> Result<()> {
+    fn init_renderer(&mut self, window: Arc<Window>) -> Result<()> {
         debug!("init_renderer");
 
         let renderer = Renderer::new(window, self.renderer_debug)?;
