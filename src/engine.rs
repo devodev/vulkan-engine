@@ -2,6 +2,7 @@ use std::{error::Error, result, sync::Arc};
 
 use gameloop::GameLoop;
 use log::debug;
+use tracing::{event, span, Level};
 use winit::{
     dpi::{LogicalSize, Size},
     event::{Event, WindowEvent},
@@ -153,17 +154,22 @@ impl Engine {
                 renderer.window_resized();
             }
             Event::MainEventsCleared => {
+                let span = span!(Level::TRACE, "Event::MainEventsCleared");
+                let _enter = span.enter();
                 // NOTE: the MainEventsCleared event "will be emitted when all input events
                 //       have been processed and redraw processing is about to begin".
                 for action in game_loop.actions() {
                     match action {
                         gameloop::FrameAction::Tick => {
+                            event!(Level::TRACE, "gameloop::FrameAction::Tick");
                             // // update state
                         }
-                        gameloop::FrameAction::Render { interpolation: _ } => {
+                        gameloop::FrameAction::Render { interpolation } => {
+                            event!(Level::TRACE, %interpolation, "gameloop::FrameAction::Render start");
                             renderer.begin();
                             // gather components and submit work
-                            renderer.end()
+                            renderer.end();
+                            event!(Level::TRACE, %interpolation, "gameloop::FrameAction::Render end");
                         }
                     }
                 }

@@ -19,6 +19,7 @@ env_logger = "0.9.0"
 gameloop = "0.2.0"
 image = "0.24.1"
 log = "0.4.16"
+tracing = { version = "0.1.34", features = ["log-always"] }
 # Benefit from latest fixes, although might be unstable
 # - Fix1: https://github.com/vulkano-rs/vulkano/issues/1858
 #     [2022-04-18T15:30:07Z DEBUG core::render] [vulkan_debug][VUID-VkSurfaceFormat2KHR-sType-sType][validation][error]: Validation Error: [ VUID-VkSurfaceFormat2KHR-sType-sType ] Object 0: VK_NULL_HANDLE, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0xcb03d9a3 | vkGetPhysicalDeviceSurfaceFormats2KHR: parameter pSurfaceFormats[0].sType must be VK_STRUCTURE_TYPE_SURFACE_FORMAT_2_KHR The Vulkan spec states: sType must be VK_STRUCTURE_TYPE_SURFACE_FORMAT_2_KHR (https://vulkan.lunarg.com/doc/view/1.3.204.1/windows/1.3-extensions/vkspec.html#VUID-VkSurfaceFormat2KHR-sType-sType)
