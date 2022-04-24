@@ -18,6 +18,8 @@ bytemuck = "1.8.0"
 env_logger = "0.9.0"
 gameloop = "0.2.0"
 image = "0.24.1"
+imgui = "0.8.0"
+imgui-winit-support = { version = "0.8.0", features = ["winit-26"] }
 log = "0.4.16"
 # Benefit from latest fixes, although might be unstable
 # - Fix1: https://github.com/vulkano-rs/vulkano/issues/1858

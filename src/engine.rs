@@ -1,6 +1,8 @@
-use std::{error::Error, result, sync::Arc};
+use std::{error::Error, result, sync::Arc, time::Instant};
 
 use gameloop::GameLoop;
+use imgui::Context;
+use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use log::debug;
 use winit::{
     dpi::{LogicalSize, Size},
@@ -124,6 +126,11 @@ impl Engine {
         // window
         let (event_loop, window) = self.init_window()?;
 
+        // imgui
+        let mut imgui = Context::create();
+        let mut platform = WinitPlatform::init(&mut imgui);
+        platform.attach_window(imgui.io_mut(), &window, HiDpiMode::Default);
+
         // renderer
         self.init_renderer(window.clone())?;
         let mut renderer = self
@@ -139,6 +146,7 @@ impl Engine {
         debug!("start event loop");
         // event_loop.run() hijacks the main thread and calls std::process::exit when
         // done anything that has not been moved in the closure will not be dropped
+        let mut last_frame = Instant::now();
         event_loop.run(move |event, _, control_flow| match event {
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
@@ -152,9 +160,25 @@ impl Engine {
             } => {
                 renderer.window_resized();
             }
-            Event::MainEventsCleared => {
+            Event::NewEvents(_) => {
+                // imgui
+                let now = Instant::now();
+                imgui
+                    .io_mut()
+                    .update_delta_time(now.duration_since(last_frame));
+                last_frame = now;
+            }
             // NOTE: the MainEventsCleared event "will be emitted when all input events
             //       have been processed and redraw processing is about to begin".
+            Event::MainEventsCleared => {
+                // imgui: prepare
+                platform
+                    .prepare_frame(imgui.io_mut(), &window) // step 4
+                    .expect("Failed to prepare imgui frame");
+                window.request_redraw();
+            }
+            Event::RedrawRequested(_) => {
+                // application-specific rendering *under the UI*
                 for action in game_loop.actions() {
                     match action {
                         gameloop::FrameAction::Tick => {
@@ -167,8 +191,32 @@ impl Engine {
                         }
                     }
                 }
+
+                // imgui: construct the UI
+                // TODO
+
+                // TODO: implement imgui rendering
+                //
+                //       missing:
+                //        - Textures
+                //
+                //       use glow-example as reference:
+                //       https://github.com/imgui-rs/imgui-rs/blob/main/imgui-glow-renderer/src/lib.rs
+                //
+                // imgui: start frame
+                // let ui = imgui.frame();
+                // // imgui: construct the UI
+                // platform.prepare_render(&ui, &window);
+                // let draw_data = ui.render();
+                // // TODO: render imgui using renderer
+                // // renderer.render(..., draw_data).expect("UI rendering
+                // // failed");
+
+                // application-specific rendering *over the UI*
             }
-            _ => (),
+            event => {
+                platform.handle_event(imgui.io_mut(), &window, &event);
+            }
         });
     }
 
