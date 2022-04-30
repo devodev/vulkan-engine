@@ -9,7 +9,7 @@ use winit::{
     window::{Fullscreen, Icon, Window, WindowBuilder},
 };
 
-use crate::render::Renderer;
+use crate::render::Renderer2D;
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
@@ -107,7 +107,7 @@ impl Default for EngineBuilder {
 
 pub struct Engine {
     window_builder: Option<WindowBuilder>,
-    renderer: Option<Renderer>,
+    renderer: Option<Renderer2D>,
     renderer_debug: bool,
 }
 
@@ -163,7 +163,7 @@ impl Engine {
                         gameloop::FrameAction::Render { interpolation: _ } => {
                             renderer.begin();
                             // gather components and submit work
-                            renderer.end()
+                            renderer.end();
                         }
                     }
                 }
@@ -187,7 +187,7 @@ impl Engine {
     fn init_renderer(&mut self, window: Arc<Window>) -> Result<()> {
         debug!("init_renderer");
 
-        let renderer = Renderer::new(window, self.renderer_debug)?;
+        let renderer = Renderer2D::new(window, self.renderer_debug)?;
         self.renderer = Some(renderer);
 
         Ok(())

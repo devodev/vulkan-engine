@@ -132,6 +132,10 @@ impl Device {
         self.image_views[0].image().dimensions().width_height()
     }
 
+    pub fn graphics_queue(&self) -> Arc<Queue> {
+        self.queues[0].clone()
+    }
+
     pub fn recreate_swapchain(&mut self) -> Result<()> {
         // recreate swapchain
         let (new_swapchain, new_images) = match self.swapchain.recreate(SwapchainCreateInfo {

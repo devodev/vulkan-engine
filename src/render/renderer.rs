@@ -115,7 +115,7 @@ type Fences = Vec<
     >,
 >;
 
-pub struct Renderer {
+pub struct Renderer2D {
     device: Device,
 
     vertex_buffer: Arc<ImmutableBuffer<[QuadVertex]>>,
@@ -134,7 +134,7 @@ pub struct Renderer {
     previous_fence_i: usize,
 }
 
-impl Renderer {
+impl Renderer2D {
     pub fn new(window: Arc<Window>, debug_enabled: bool) -> Result<Self> {
         let device = Device::new(DeviceDefinition::new(window).with_debug_enabled(debug_enabled))?;
 
@@ -175,7 +175,7 @@ impl Renderer {
         .unwrap();
 
         let frames_in_flight = device.image_views.len();
-        let r = Renderer {
+        let r = Renderer2D {
             device,
             vertex_buffer,
             index_buffer,
@@ -229,20 +229,10 @@ impl Renderer {
             image_fence.wait(None).unwrap();
         }
 
-        let previous_future = match self.fences[self.previous_fence_i].clone() {
-            // Create a NowFuture
-            None => {
-                let mut now = sync::now(self.device.device.clone());
-                now.cleanup_finished();
-                now.boxed()
-            }
-            // Use the existing FenceSignalFuture
-            Some(fence) => fence.boxed(),
-        };
+        let previous_future = self.previous_future();
 
         // create command buffer
-        let gfx_queue = self.device.queues[0].clone();
-
+        let gfx_queue = self.device.graphics_queue();
         let mut cb_builder = AutoCommandBufferBuilder::primary(
             self.device.device.clone(),
             gfx_queue.family(),
@@ -269,7 +259,7 @@ impl Renderer {
         // put command_buffer in Arc to be able to store the future in self.fences
         let command_buffer = Arc::new(cb_builder.build().unwrap());
 
-        // synchronize previous ssubmission with current which will execute our command
+        // synchronize previous submission with current which will execute our command
         // buffer and present the swapchain. It returns a fence future that will be
         // signaled when this has completed
         let future = previous_future
@@ -305,6 +295,19 @@ impl Renderer {
             self.device.dimensions(),
         )
         .unwrap();
+    }
+
+    fn previous_future(&self) -> Box<dyn GpuFuture> {
+        match self.fences[self.previous_fence_i].clone() {
+            // Create a NowFuture
+            None => {
+                let mut now = sync::now(self.device.device.clone());
+                now.cleanup_finished();
+                now.boxed()
+            }
+            // Use the existing FenceSignalFuture
+            Some(fence) => fence.boxed(),
+        }
     }
 }
 
