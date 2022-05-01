@@ -146,16 +146,16 @@ impl Device {
             Err(SwapchainCreationError::ImageExtentNotSupported { .. }) => return Ok(()),
             Err(e) => panic!("Failed to recreate swapchain: {:?}", e),
         };
-        self.swapchain = new_swapchain;
 
         // this is duplicated from create_swapchain()
-        let new_images = new_images
+        let image_views = new_images
             .iter()
             .map(|img| ImageView::new_default(img.clone()).unwrap())
             .collect::<Vec<Arc<ImageView<SwapchainImage<Arc<Window>>>>>>();
 
-        self.framebuffers = create_framebuffers(&new_images, self.render_pass.clone())?;
-        self.image_views = new_images;
+        self.framebuffers = create_framebuffers(&image_views, self.render_pass.clone())?;
+        self.swapchain = new_swapchain;
+        self.image_views = image_views;
 
         Ok(())
     }

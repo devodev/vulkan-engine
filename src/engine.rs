@@ -162,7 +162,11 @@ impl Engine {
                         }
                         gameloop::FrameAction::Render { interpolation: _ } => {
                             renderer.begin();
+
+                            renderer.draw_quad(&[1.0, 0.7, 0.0, 1.0]);
+
                             // gather components and submit work
+
                             renderer.end();
                         }
                     }
