@@ -57,6 +57,8 @@ impl Renderer2D {
     }
 
     pub fn begin(&mut self) -> Result<Box<dyn GpuFuture>> {
+        self.previous_frame_end.as_mut().unwrap().cleanup_finished();
+
         if self.should_recreate_swapchain {
             self.recreate_swapchain_and_views();
             self.should_recreate_swapchain = false;
@@ -105,10 +107,14 @@ impl Renderer2D {
             Ok(future) => {
                 // Prevent OutOfMemory error on Nvidia :(
                 // https://github.com/vulkano-rs/vulkano/issues/627
-                match future.wait(None) {
-                    Ok(x) => x,
-                    Err(err) => error!("{:?}", err),
-                }
+                //
+                // Adding the following line at the begining of begin() fixes it:
+                //   self.previous_frame_end.as_mut().unwrap().cleanup_finished();
+                //
+                // match future.wait(None) {
+                //     Ok(x) => x,
+                //     Err(err) => error!("{:?}", err),
+                // }
                 self.previous_frame_end = Some(future.boxed());
             }
             Err(FlushError::OutOfDate) => {
