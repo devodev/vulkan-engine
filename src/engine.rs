@@ -161,11 +161,11 @@ impl Engine {
                             // update state
                         }
                         gameloop::FrameAction::Render { interpolation: _ } => {
-                            let after_future = renderer.start().unwrap();
+                            let after_future = renderer.begin().unwrap();
                             for _ in 1..1000 {
                                 renderer.draw_quad(&[1.0, 0.9, 0.0, 1.0]);
                             }
-                            renderer.finish(after_future);
+                            renderer.end(after_future);
                         }
                     }
                 }

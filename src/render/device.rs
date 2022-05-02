@@ -6,7 +6,7 @@ use vulkano::{
         physical::{PhysicalDevice, PhysicalDeviceType, QueueFamily},
         DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo,
     },
-    image::{view::ImageView, ImageUsage, SwapchainImage},
+    image::{view::ImageView, ImageUsage, ImageViewAbstract, SwapchainImage},
     instance::{
         debug::{
             DebugUtilsMessageSeverity, DebugUtilsMessageType, DebugUtilsMessenger,
@@ -47,6 +47,7 @@ pub struct Device {
     pub queues: Vec<Arc<Queue>>,
     pub swapchain: Arc<Swapchain<Arc<Window>>>,
     pub image_views: Vec<Arc<ImageView<SwapchainImage<Arc<Window>>>>>,
+    pub image_index: usize,
 
     // need to keep the Vulkan debug callback alive for the entier lifetime of the app
     #[allow(dead_code)]
@@ -110,6 +111,7 @@ impl Device {
             debug_callback,
             swapchain,
             image_views,
+            image_index: 0,
         })
     }
 
@@ -138,6 +140,10 @@ impl Device {
         self.image_views = image_views;
 
         Ok(())
+    }
+
+    pub fn image_view(&self) -> Arc<dyn ImageViewAbstract> {
+        self.image_views[self.image_index].clone()
     }
 }
 

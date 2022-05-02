@@ -63,7 +63,7 @@ pub struct QuadPipeline {
     // graphics pipeline
     gfx_queue: Arc<Queue>,
     pipeline: Arc<GraphicsPipeline>,
-    // batch rendering cache
+    // batch rendering
     max_quads: usize,
     quads_count: usize,
     vertices: Vec<QuadVertex>,
@@ -127,8 +127,10 @@ impl QuadPipeline {
         &mut self,
         viewport_dimensions: [u32; 2],
     ) -> Option<(SecondaryAutoCommandBuffer, Box<dyn GpuFuture>)> {
+        // flush remaining quads
         self.flush_batch();
 
+        // bail out if nothing to draw
         if self.buffer_data.is_empty() {
             return None;
         }
@@ -141,18 +143,21 @@ impl QuadPipeline {
             self.pipeline.subpass().clone(),
         )
         .unwrap();
-        builder
-            .set_viewport(
-                0,
-                [Viewport {
-                    origin: [0.0, 0.0],
-                    dimensions: [viewport_dimensions[0] as f32, viewport_dimensions[1] as f32],
-                    depth_range: 0.0..1.0,
-                }],
-            )
-            .bind_pipeline_graphics(self.pipeline.clone());
+        builder.set_viewport(
+            0,
+            [Viewport {
+                origin: [0.0, 0.0],
+                dimensions: [viewport_dimensions[0] as f32, viewport_dimensions[1] as f32],
+                depth_range: 0.0..1.0,
+            }],
+        );
 
         let mut future = sync::now(self.gfx_queue.device().clone()).boxed();
+
+        // record draw commands on the secondary command buffer
+        if !self.buffer_data.is_empty() {
+            builder.bind_pipeline_graphics(self.pipeline.clone());
+        }
         for data in self.buffer_data.drain(..) {
             future = Box::new(future.join(data.future));
             builder
@@ -217,6 +222,13 @@ pub mod vs {
         ty: "vertex",
         src: "
 #version 450
+
+// uniforms
+layout(binding = 0) uniform UniformBufferObject {
+    mat4 model;
+    mat4 view;
+    mat4 proj;
+} mvp;
 
 // inputs
 layout(location = 0) in vec3 position;

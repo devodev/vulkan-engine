@@ -25,7 +25,6 @@ pub struct Renderer2D {
     should_recreate_swapchain: bool,
 
     render_pass: QuadRenderPass,
-    image_index: usize,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
 }
 
@@ -42,7 +41,6 @@ impl Renderer2D {
             background_color: DEFAULT_BACKGROUND_COLOR,
             should_recreate_swapchain: false,
             render_pass,
-            image_index: 0,
             previous_frame_end,
         };
 
@@ -58,7 +56,7 @@ impl Renderer2D {
         self.should_recreate_swapchain = true;
     }
 
-    pub fn start(&mut self) -> Result<Box<dyn GpuFuture>> {
+    pub fn begin(&mut self) -> Result<Box<dyn GpuFuture>> {
         if self.should_recreate_swapchain {
             self.recreate_swapchain_and_views();
             self.should_recreate_swapchain = false;
@@ -79,18 +77,18 @@ impl Renderer2D {
         }
 
         // set current swapchain image index
-        self.image_index = image_i;
+        self.device.image_index = image_i;
 
         // join previous frame future with acquire frame future
         let future = self.previous_frame_end.take().unwrap().join(acquire_future);
         Ok(future.boxed())
     }
 
-    pub fn finish(&mut self, after_future: Box<dyn GpuFuture>) {
+    pub fn end(&mut self, after_future: Box<dyn GpuFuture>) {
         // submit graphics quads render pass (submit command buffer)
         let render_future = self.render_pass.render(
             after_future,
-            self.device.image_views[self.image_index].clone(),
+            self.device.image_view(),
             self.background_color,
         );
 
@@ -99,7 +97,7 @@ impl Renderer2D {
             .then_swapchain_present(
                 self.device.graphics_queue(),
                 self.device.swapchain.clone(),
-                self.image_index,
+                self.device.image_index,
             )
             .then_signal_fence_and_flush();
 
