@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
 use vulkano::{
-    buffer::{BufferUsage, ImmutableBuffer},
+    buffer::{BufferUsage, CpuBufferPool, ImmutableBuffer},
     command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, SecondaryAutoCommandBuffer},
+    descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet},
     device::Queue,
     pipeline::{
         graphics::{
@@ -11,7 +12,7 @@ use vulkano::{
             vertex_input::BuffersDefinition,
             viewport::{Viewport, ViewportState},
         },
-        GraphicsPipeline,
+        GraphicsPipeline, Pipeline,
     },
     render_pass::Subpass,
     sync::{self, GpuFuture},
@@ -69,6 +70,7 @@ pub struct QuadPipeline {
     vertices: Vec<QuadVertex>,
     indices: Vec<u32>,
     buffer_data: Vec<QuadBufferData>,
+    uniform_buffer: Arc<CpuBufferPool<vs::ty::Data>>,
 }
 
 impl QuadPipeline {
@@ -93,6 +95,11 @@ impl QuadPipeline {
         };
         let max_quads = DEFAULT_MAX_QUADS;
 
+        let uniform_buffer = Arc::new(CpuBufferPool::<vs::ty::Data>::new(
+            gfx_queue.device().clone(),
+            BufferUsage::uniform_buffer(),
+        ));
+
         Self {
             gfx_queue,
             pipeline,
@@ -101,6 +108,7 @@ impl QuadPipeline {
             vertices: Vec::with_capacity(max_quads * 4),
             indices: Vec::with_capacity(max_quads * 6),
             buffer_data: Vec::new(),
+            uniform_buffer,
         }
     }
 
@@ -139,7 +147,7 @@ impl QuadPipeline {
         let mut builder = AutoCommandBufferBuilder::secondary_graphics(
             self.gfx_queue.device().clone(),
             self.gfx_queue.family(),
-            CommandBufferUsage::MultipleSubmit,
+            CommandBufferUsage::OneTimeSubmit,
             self.pipeline.subpass().clone(),
         )
         .unwrap();
@@ -157,14 +165,34 @@ impl QuadPipeline {
         // record draw commands on the secondary command buffer
         if !self.buffer_data.is_empty() {
             builder.bind_pipeline_graphics(self.pipeline.clone());
-        }
-        for data in self.buffer_data.drain(..) {
-            future = Box::new(future.join(data.future));
-            builder
-                .bind_vertex_buffers(0, data.vertex_buffer)
-                .bind_index_buffer(data.index_buffer)
-                .draw_indexed((data.quads_count * 6) as u32, 1, 0, 0, 0)
-                .unwrap();
+
+            // uniform buffer
+            let color = [1.0, 0.5, 0.0, 1.0];
+            let data = vs::ty::Data { color };
+            let subbuffer = self.uniform_buffer.next(data).unwrap();
+            let layout = self.pipeline.layout().set_layouts().get(0).unwrap();
+            let set = PersistentDescriptorSet::new(
+                layout.clone(),
+                [WriteDescriptorSet::buffer(0, subbuffer)],
+            )
+            .unwrap();
+
+            builder.bind_descriptor_sets(
+                vulkano::pipeline::PipelineBindPoint::Graphics,
+                self.pipeline.layout().clone(),
+                0,
+                set,
+            );
+
+            for data in self.buffer_data.drain(..) {
+                future = Box::new(future.join(data.future));
+
+                builder
+                    .bind_vertex_buffers(0, data.vertex_buffer)
+                    .bind_index_buffer(data.index_buffer)
+                    .draw_indexed((data.quads_count * 6) as u32, 1, 0, 0, 0)
+                    .unwrap();
+            }
         }
 
         let command_buffer = builder.build().unwrap();
@@ -220,15 +248,24 @@ impl QuadPipeline {
 pub mod vs {
     vulkano_shaders::shader! {
         ty: "vertex",
+        types_meta: {
+            use bytemuck::{Pod, Zeroable};
+
+            #[derive(Clone, Copy, Zeroable, Pod)]
+        },
         src: "
 #version 450
 
 // uniforms
-layout(binding = 0) uniform UniformBufferObject {
-    mat4 model;
-    mat4 view;
-    mat4 proj;
-} mvp;
+// layout(binding = 0) uniform UniformBufferObject {
+//     mat4 model;
+//     mat4 view;
+//     mat4 proj;
+// } mvp;
+layout(binding = 0) uniform Data {
+    vec4 color;
+} uni;
+
 
 // inputs
 layout(location = 0) in vec3 position;
@@ -238,7 +275,8 @@ layout(location = 1) in vec4 color;
 layout(location = 0) out vec4 frag_Color;
 
 void main() {
-    frag_Color = color;
+    //frag_Color = color;
+    frag_Color = uni.color;
     gl_Position = vec4(position, 1.0);
 }"
     }
