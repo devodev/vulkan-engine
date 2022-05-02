@@ -1,7 +1,6 @@
 use std::{collections::HashSet, error::Error, result, sync::Arc};
 
 use log::debug;
-use vulkano::image::ImageAccess;
 use vulkano::{
     device::{
         physical::{PhysicalDevice, PhysicalDeviceType, QueueFamily},
@@ -15,7 +14,6 @@ use vulkano::{
         },
         layers_list, Instance, InstanceCreateInfo, InstanceExtensions,
     },
-    render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass},
     swapchain::{Surface, Swapchain, SwapchainCreateInfo, SwapchainCreationError},
 };
 use vulkano_win::create_surface_from_winit;
@@ -49,8 +47,6 @@ pub struct Device {
     pub queues: Vec<Arc<Queue>>,
     pub swapchain: Arc<Swapchain<Arc<Window>>>,
     pub image_views: Vec<Arc<ImageView<SwapchainImage<Arc<Window>>>>>,
-    pub render_pass: Arc<RenderPass>,
-    pub framebuffers: Vec<Arc<Framebuffer>>,
 
     // need to keep the Vulkan debug callback alive for the entier lifetime of the app
     #[allow(dead_code)]
@@ -106,15 +102,6 @@ impl Device {
         let (swapchain, image_views) =
             create_swapchain(&physical_device, &device, surface.clone())?;
 
-        // -----------------------------------------------------------------------------------
-        // create render pass
-        // -----------------------------------------------------------------------------------
-
-        // these two steps are expensive and should be performed a minimum amount of
-        // time.
-        let render_pass = create_render_pass(device.clone(), swapchain.clone())?;
-        let framebuffers = create_framebuffers(&image_views, render_pass.clone())?;
-
         Ok(Self {
             instance,
             surface,
@@ -123,20 +110,14 @@ impl Device {
             debug_callback,
             swapchain,
             image_views,
-            render_pass,
-            framebuffers,
         })
-    }
-
-    pub fn dimensions(&self) -> [u32; 2] {
-        self.image_views[0].image().dimensions().width_height()
     }
 
     pub fn graphics_queue(&self) -> Arc<Queue> {
         self.queues[0].clone()
     }
 
-    pub fn recreate_swapchain(&mut self) -> Result<()> {
+    pub fn recreate_swapchain_and_views(&mut self) -> Result<()> {
         // recreate swapchain
         let (new_swapchain, new_images) = match self.swapchain.recreate(SwapchainCreateInfo {
             image_extent: self.surface.window().inner_size().into(),
@@ -151,9 +132,8 @@ impl Device {
         let image_views = new_images
             .iter()
             .map(|img| ImageView::new_default(img.clone()).unwrap())
-            .collect::<Vec<Arc<ImageView<SwapchainImage<Arc<Window>>>>>>();
+            .collect::<Vec<_>>();
 
-        self.framebuffers = create_framebuffers(&image_views, self.render_pass.clone())?;
         self.swapchain = new_swapchain;
         self.image_views = image_views;
 
@@ -293,57 +273,9 @@ fn create_swapchain<'a>(
     let images = images
         .iter()
         .map(|img| ImageView::new_default(img.clone()).unwrap())
-        .collect::<Vec<Arc<ImageView<SwapchainImage<Arc<Window>>>>>>();
-
-    Ok((swapchain, images))
-}
-
-type RenderPassResult = Result<Arc<RenderPass>>;
-
-fn create_render_pass(
-    device: Arc<vulkano::device::Device>,
-    swapchain: Arc<Swapchain<Arc<Window>>>,
-) -> RenderPassResult {
-    let rp = vulkano::single_pass_renderpass!(
-        device,
-        attachments: {
-            color: {
-                load: Clear,
-                store: Store,
-                format: swapchain.image_format(),  // set the format the same as the swapchain
-                samples: 1,
-            }
-        },
-        pass: {
-            color: [color],
-            depth_stencil: {}
-        }
-    )?;
-
-    Ok(rp)
-}
-
-type FramebuffersResult = Result<Vec<Arc<Framebuffer>>>;
-
-fn create_framebuffers(
-    image_views: &[Arc<ImageView<SwapchainImage<Arc<Window>>>>],
-    render_pass: Arc<RenderPass>,
-) -> FramebuffersResult {
-    let fbs = image_views
-        .iter()
-        .map(|view| -> Arc<Framebuffer> {
-            Framebuffer::new(
-                render_pass.clone(),
-                FramebufferCreateInfo {
-                    attachments: vec![view.clone()],
-                    ..Default::default()
-                },
-            )
-            .unwrap()
-        })
         .collect::<Vec<_>>();
 
-    Ok(fbs)
+    Ok((swapchain, images))
 }
 
 fn create_debug_callback(instance: Arc<Instance>) -> Result<DebugUtilsMessenger> {

@@ -158,16 +158,14 @@ impl Engine {
                 for action in game_loop.actions() {
                     match action {
                         gameloop::FrameAction::Tick => {
-                            // // update state
+                            // update state
                         }
                         gameloop::FrameAction::Render { interpolation: _ } => {
-                            renderer.begin();
-
-                            renderer.draw_quad(&[1.0, 0.7, 0.0, 1.0]);
-
-                            // gather components and submit work
-
-                            renderer.end();
+                            let after_future = renderer.start().unwrap();
+                            for _ in 1..1000 {
+                                renderer.draw_quad(&[1.0, 0.9, 0.0, 1.0]);
+                            }
+                            renderer.finish(after_future);
                         }
                     }
                 }
@@ -178,6 +176,7 @@ impl Engine {
 
     fn init_window(&mut self) -> Result<(EventLoop<()>, Arc<Window>)> {
         debug!("init_window");
+
         let event_loop = EventLoop::new();
         let window = self
             .window_builder
