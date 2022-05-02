@@ -18,6 +18,8 @@ use vulkano::{
     sync::{self, GpuFuture},
 };
 
+use crate::render::renderer::ModelViewProjection;
+
 #[repr(C)]
 #[derive(Default, Copy, Clone, Zeroable, Pod)]
 pub struct QuadVertex {
@@ -70,7 +72,7 @@ pub struct QuadPipeline {
     vertices: Vec<QuadVertex>,
     indices: Vec<u32>,
     buffer_data: Vec<QuadBufferData>,
-    uniform_buffer: Arc<CpuBufferPool<vs::ty::Data>>,
+    uniform_buffer_mvp: Arc<CpuBufferPool<vs::ty::MVP>>,
 }
 
 impl QuadPipeline {
@@ -95,7 +97,7 @@ impl QuadPipeline {
         };
         let max_quads = DEFAULT_MAX_QUADS;
 
-        let uniform_buffer = Arc::new(CpuBufferPool::<vs::ty::Data>::new(
+        let uniform_buffer_mvp = Arc::new(CpuBufferPool::<vs::ty::MVP>::new(
             gfx_queue.device().clone(),
             BufferUsage::uniform_buffer(),
         ));
@@ -108,7 +110,7 @@ impl QuadPipeline {
             vertices: Vec::with_capacity(max_quads * 4),
             indices: Vec::with_capacity(max_quads * 6),
             buffer_data: Vec::new(),
-            uniform_buffer,
+            uniform_buffer_mvp,
         }
     }
 
@@ -134,6 +136,7 @@ impl QuadPipeline {
     pub fn draw(
         &mut self,
         viewport_dimensions: [u32; 2],
+        mvp: &ModelViewProjection,
     ) -> Option<(SecondaryAutoCommandBuffer, Box<dyn GpuFuture>)> {
         // flush remaining quads
         self.flush_batch();
@@ -167,9 +170,14 @@ impl QuadPipeline {
             builder.bind_pipeline_graphics(self.pipeline.clone());
 
             // uniform buffer
-            let color = [1.0, 0.5, 0.0, 1.0];
-            let data = vs::ty::Data { color };
-            let subbuffer = self.uniform_buffer.next(data).unwrap();
+            let subbuffer = self
+                .uniform_buffer_mvp
+                .next(vs::ty::MVP {
+                    model: mvp.model.into(),
+                    view: mvp.view.into(),
+                    proj: mvp.proj.into(),
+                })
+                .unwrap();
             let layout = self.pipeline.layout().set_layouts().get(0).unwrap();
             let set = PersistentDescriptorSet::new(
                 layout.clone(),
@@ -257,15 +265,11 @@ pub mod vs {
 #version 450
 
 // uniforms
-// layout(binding = 0) uniform UniformBufferObject {
-//     mat4 model;
-//     mat4 view;
-//     mat4 proj;
-// } mvp;
-layout(binding = 0) uniform Data {
-    vec4 color;
-} uni;
-
+layout(binding = 0) uniform MVP {
+    mat4 model;
+    mat4 view;
+    mat4 proj;
+} mvp;
 
 // inputs
 layout(location = 0) in vec3 position;
@@ -275,9 +279,8 @@ layout(location = 1) in vec4 color;
 layout(location = 0) out vec4 frag_Color;
 
 void main() {
-    //frag_Color = color;
-    frag_Color = uni.color;
-    gl_Position = vec4(position, 1.0);
+    frag_Color = color;
+    gl_Position = mvp.proj * mvp.view * mvp.model * vec4(position, 1.0);
 }"
     }
 }

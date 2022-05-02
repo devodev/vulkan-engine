@@ -10,6 +10,7 @@ use vulkano::{
 };
 
 use super::pipeline::QuadPipeline;
+use crate::render::renderer::ModelViewProjection;
 
 // QuadRenderPass is responsible for creating a render pass and a graphics
 // pipeline.
@@ -58,6 +59,7 @@ impl QuadRenderPass {
         before_future: Box<dyn GpuFuture>,
         image_view: Arc<dyn ImageViewAbstract>,
         clear_value: [f32; 4],
+        mvp: &ModelViewProjection,
     ) -> Box<dyn GpuFuture> {
         let dimensions = image_view.clone().image().dimensions();
         let framebuffer = Framebuffer::new(
@@ -90,7 +92,8 @@ impl QuadRenderPass {
 
         // Create secondary command buffer from texture pipeline & send draw
         // commands
-        if let Some((draw_cb, buffers_future)) = self.pipeline.draw(dimensions.width_height()) {
+        if let Some((draw_cb, buffers_future)) = self.pipeline.draw(dimensions.width_height(), mvp)
+        {
             after_future = Box::new(after_future.join(buffers_future));
             // Execute above commands (subpass)
             command_buffer_builder.execute_commands(draw_cb).unwrap();

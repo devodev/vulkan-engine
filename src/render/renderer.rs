@@ -2,6 +2,7 @@ use std::error::Error;
 use std::result;
 use std::sync::Arc;
 
+use cgmath::{Matrix4, Point3, SquareMatrix, Vector3};
 use log::error;
 use vulkano::swapchain::AcquireError;
 use vulkano::sync::{FlushError, GpuFuture};
@@ -14,6 +15,19 @@ use crate::render::{Device, DeviceDefinition};
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
 const DEFAULT_BACKGROUND_COLOR: [f32; 4] = [0.0, 0.4, 1.0, 1.0];
+
+#[derive(Debug, Clone, Copy)]
+pub struct ModelViewProjection {
+    pub model: Matrix4<f32>,
+    pub view: Matrix4<f32>,
+    pub proj: Matrix4<f32>,
+}
+
+impl ModelViewProjection {
+    pub fn new(model: Matrix4<f32>, view: Matrix4<f32>, proj: Matrix4<f32>) -> Self {
+        Self { model, view, proj }
+    }
+}
 
 // inspiration: https://github.com/vulkano-rs/vulkano/tree/master/examples/src/bin/interactive_fractal
 pub struct Renderer2D {
@@ -87,11 +101,20 @@ impl Renderer2D {
     }
 
     pub fn end(&mut self, after_future: Box<dyn GpuFuture>) {
+        let model = Matrix4::identity();
+        let view = Matrix4::look_at_lh(
+            Point3::new(0.0, 0.0, 0.0),
+            Point3::new(0.0, 0.0, -1.0),
+            Vector3::new(0.0, 1.0, 0.0),
+        );
+        let proj = Matrix4::identity();
+        let mvp = ModelViewProjection::new(model, view, proj);
         // submit graphics quads render pass (submit command buffer)
         let render_future = self.render_pass.render(
             after_future,
             self.device.image_view(),
             self.background_color,
+            &mvp,
         );
 
         // present swapchain image
