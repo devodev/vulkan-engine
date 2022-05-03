@@ -1,16 +1,20 @@
-use std::sync::Arc;
+use std::{error::Error, result, sync::Arc};
 
 use vulkano::{
-    command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, SubpassContents},
+    command_buffer::{
+        AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, SubpassContents,
+    },
     device::Queue,
     format::Format,
     image::{ImageAccess, ImageViewAbstract},
     render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass},
-    sync::GpuFuture,
+    sync::{self, GpuFuture},
 };
 
 use super::pipeline::QuadPipeline;
 use crate::render::renderer::ModelViewProjection;
+
+type Result<T> = result::Result<T, Box<dyn Error>>;
 
 // QuadRenderPass is responsible for creating a render pass and a graphics
 // pipeline.
@@ -61,6 +65,36 @@ impl QuadRenderPass {
         clear_value: [f32; 4],
         mvp: &ModelViewProjection,
     ) -> Box<dyn GpuFuture> {
+        // create command buffer for copying uniform data
+        let uniforms_cb = self
+            .pipeline
+            .copy_uniforms(mvp)
+            .expect("create uniform command buffer");
+
+        // create command buffer for render pass
+        let (renderpass_cb, renderpass_future) =
+            self.renderpass_cb(image_view, clear_value).unwrap();
+
+        // Execute command buffers
+        let after_future = before_future
+            .join(renderpass_future)
+            .then_execute(self.gfx_queue.clone(), uniforms_cb)
+            .unwrap()
+            .then_execute(self.gfx_queue.clone(), renderpass_cb)
+            .unwrap();
+
+        after_future.boxed()
+    }
+
+    pub fn draw_quad(&mut self, color: &[f32; 4]) {
+        self.pipeline.add_quad(color)
+    }
+
+    fn renderpass_cb(
+        &mut self,
+        image_view: Arc<dyn ImageViewAbstract>,
+        clear_value: [f32; 4],
+    ) -> Result<(PrimaryAutoCommandBuffer, Box<dyn GpuFuture>)> {
         let dimensions = image_view.clone().image().dimensions();
         let framebuffer = Framebuffer::new(
             self.render_pass.clone(),
@@ -70,8 +104,6 @@ impl QuadRenderPass {
             },
         )
         .unwrap();
-
-        // Create primary command buffer builder
         let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
             self.gfx_queue.device().clone(),
             self.gfx_queue.family(),
@@ -88,29 +120,19 @@ impl QuadRenderPass {
             )
             .unwrap();
 
-        let mut after_future = before_future;
-
         // Create secondary command buffer from texture pipeline & send draw
         // commands
-        if let Some((draw_cb, buffers_future)) = self.pipeline.draw(dimensions.width_height(), mvp)
-        {
-            after_future = Box::new(after_future.join(buffers_future));
+        let mut future = sync::now(self.gfx_queue.device().clone()).boxed();
+        if let Some((draw_cb, buffers_future)) = self.pipeline.draw(dimensions.width_height()) {
+            future = Box::new(future.join(buffers_future));
             // Execute above commands (subpass)
             command_buffer_builder.execute_commands(draw_cb).unwrap();
         }
         // End render pass
         command_buffer_builder.end_render_pass().unwrap();
         // Build command buffer
-        let command_buffer = command_buffer_builder.build().unwrap();
-        // Execute primary command buffer
-        let after_future = after_future
-            .then_execute(self.gfx_queue.clone(), command_buffer)
-            .unwrap();
+        let command_buffer = command_buffer_builder.build()?;
 
-        after_future.boxed()
-    }
-
-    pub fn draw_quad(&mut self, color: &[f32; 4]) {
-        self.pipeline.add_quad(color)
+        Ok((command_buffer, future))
     }
 }

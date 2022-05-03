@@ -1,9 +1,12 @@
-use std::sync::Arc;
+use std::{error::Error, result, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
 use vulkano::{
-    buffer::{BufferUsage, CpuBufferPool, ImmutableBuffer},
-    command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, SecondaryAutoCommandBuffer},
+    buffer::{BufferUsage, CpuBufferPool, DeviceLocalBuffer, ImmutableBuffer},
+    command_buffer::{
+        AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo, PrimaryAutoCommandBuffer,
+        SecondaryAutoCommandBuffer,
+    },
     descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet},
     device::Queue,
     pipeline::{
@@ -19,6 +22,8 @@ use vulkano::{
 };
 
 use crate::render::renderer::ModelViewProjection;
+
+type Result<T> = result::Result<T, Box<dyn Error>>;
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, Zeroable, Pod)]
@@ -72,12 +77,16 @@ pub struct QuadPipeline {
     vertices: Vec<QuadVertex>,
     indices: Vec<u32>,
     buffer_data: Vec<QuadBufferData>,
-    uniform_buffer_mvp: Arc<CpuBufferPool<vs::ty::MVP>>,
+    uniform_mvp_buffer: Arc<CpuBufferPool<vs::ty::MVP>>,
+    uniform_mvp_buffer_dev: Arc<DeviceLocalBuffer<vs::ty::MVP>>,
+    uniform_mvp_ds: Arc<PersistentDescriptorSet>,
 }
 
 impl QuadPipeline {
     // TODO: subpass == Subpass::from(render_pass.clone(), 0).unwrap()
     pub fn new(gfx_queue: Arc<Queue>, subpass: Subpass) -> Self {
+        let max_quads = DEFAULT_MAX_QUADS;
+        // graphics pipeline
         let pipeline = {
             // compile shaders
             let vs = vs::load(gfx_queue.device().clone())
@@ -95,12 +104,29 @@ impl QuadPipeline {
                 .build(gfx_queue.device().clone())
                 .unwrap()
         };
-        let max_quads = DEFAULT_MAX_QUADS;
 
-        let uniform_buffer_mvp = Arc::new(CpuBufferPool::<vs::ty::MVP>::new(
+        // create cpu and gpu buffers (we will copy data between them each frame)
+        let uniform_mvp_buffer = Arc::new(CpuBufferPool::<vs::ty::MVP>::new(
             gfx_queue.device().clone(),
-            BufferUsage::uniform_buffer(),
+            BufferUsage::transfer_src(),
         ));
+        let uniform_mvp_buffer_dev = DeviceLocalBuffer::<vs::ty::MVP>::new(
+            gfx_queue.device().clone(),
+            BufferUsage::uniform_buffer_transfer_dst(),
+            [gfx_queue.family()],
+        )
+        .expect("create device local buffer for storing mvp uniform");
+
+        // create descriptor set
+        let layout = pipeline.layout().set_layouts().get(0).unwrap();
+        let uniform_mvp_ds = PersistentDescriptorSet::new(
+            layout.clone(),
+            [WriteDescriptorSet::buffer(
+                0,
+                uniform_mvp_buffer_dev.clone(),
+            )],
+        )
+        .expect("create descriptor set for mvp uniform buffer");
 
         Self {
             gfx_queue,
@@ -110,7 +136,9 @@ impl QuadPipeline {
             vertices: Vec::with_capacity(max_quads * 4),
             indices: Vec::with_capacity(max_quads * 6),
             buffer_data: Vec::new(),
-            uniform_buffer_mvp,
+            uniform_mvp_buffer,
+            uniform_mvp_buffer_dev,
+            uniform_mvp_ds,
         }
     }
 
@@ -136,7 +164,6 @@ impl QuadPipeline {
     pub fn draw(
         &mut self,
         viewport_dimensions: [u32; 2],
-        mvp: &ModelViewProjection,
     ) -> Option<(SecondaryAutoCommandBuffer, Box<dyn GpuFuture>)> {
         // flush remaining quads
         self.flush_batch();
@@ -167,31 +194,18 @@ impl QuadPipeline {
 
         // record draw commands on the secondary command buffer
         if !self.buffer_data.is_empty() {
+            // bind pipeline
             builder.bind_pipeline_graphics(self.pipeline.clone());
 
-            // uniform buffer
-            let subbuffer = self
-                .uniform_buffer_mvp
-                .next(vs::ty::MVP {
-                    model: mvp.model.into(),
-                    view: mvp.view.into(),
-                    proj: mvp.proj.into(),
-                })
-                .unwrap();
-            let layout = self.pipeline.layout().set_layouts().get(0).unwrap();
-            let set = PersistentDescriptorSet::new(
-                layout.clone(),
-                [WriteDescriptorSet::buffer(0, subbuffer)],
-            )
-            .unwrap();
-
+            // bind uniform buffer descriptor set
             builder.bind_descriptor_sets(
                 vulkano::pipeline::PipelineBindPoint::Graphics,
                 self.pipeline.layout().clone(),
                 0,
-                set,
+                self.uniform_mvp_ds.clone(),
             );
 
+            // record draw commands
             for data in self.buffer_data.drain(..) {
                 future = Box::new(future.join(data.future));
 
@@ -207,6 +221,27 @@ impl QuadPipeline {
         let future = Box::new(future);
 
         Some((command_buffer, future))
+    }
+
+    pub fn copy_uniforms(&mut self, mvp: &ModelViewProjection) -> Result<PrimaryAutoCommandBuffer> {
+        let subbuffer = self.uniform_mvp_buffer.next(vs::ty::MVP {
+            model: mvp.model.into(),
+            view: mvp.view.into(),
+            proj: mvp.proj.into(),
+        })?;
+
+        let mut cbb = AutoCommandBufferBuilder::primary(
+            self.gfx_queue.device().clone(),
+            self.gfx_queue.family(),
+            CommandBufferUsage::OneTimeSubmit,
+        )?;
+        cbb.copy_buffer(CopyBufferInfo::buffers(
+            subbuffer,
+            self.uniform_mvp_buffer_dev.clone(),
+        ))?;
+        let cb = cbb.build()?;
+
+        Ok(cb)
     }
 
     fn flush_batch(&mut self) {
