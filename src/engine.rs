@@ -9,6 +9,7 @@ use winit::{
     window::{Fullscreen, Icon, Window, WindowBuilder},
 };
 
+use crate::render::camera::{CameraController, CameraOrthographic};
 use crate::render::Renderer2D;
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
@@ -123,6 +124,11 @@ impl Engine {
     pub fn run(&mut self) -> Result<()> {
         // window
         let (event_loop, window) = self.init_window()?;
+        let dimensions = window.inner_size();
+
+        // camera
+        let camera = CameraOrthographic::new(dimensions.width, dimensions.height);
+        let mut camera_controller = CameraController::new(camera);
 
         // renderer
         self.init_renderer(window)?;
@@ -162,15 +168,16 @@ impl Engine {
                         }
                         gameloop::FrameAction::Render { interpolation: _ } => {
                             let after_future = renderer.begin().unwrap();
+                            let quad_color = &[1.0, 0.9, 0.0, 1.0];
                             for _ in 1..1000 {
-                                renderer.draw_quad(&[1.0, 0.9, 0.0, 1.0]);
+                                renderer.draw_quad(quad_color);
                             }
-                            renderer.end(after_future);
+                            renderer.end(after_future, camera_controller.view_projection_matrix());
                         }
                     }
                 }
             }
-            _ => (),
+            _ => camera_controller.on_update(&event),
         });
     }
 

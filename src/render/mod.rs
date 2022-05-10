@@ -1,3 +1,4 @@
+pub mod camera;
 mod device;
 mod quad;
 mod renderer;

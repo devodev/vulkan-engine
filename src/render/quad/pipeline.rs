@@ -1,6 +1,7 @@
 use std::{error::Error, result, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
+use cgmath::Matrix4;
 use vulkano::{
     buffer::{BufferUsage, CpuBufferPool, DeviceLocalBuffer, ImmutableBuffer},
     command_buffer::{
@@ -20,8 +21,6 @@ use vulkano::{
     render_pass::Subpass,
     sync::{self, GpuFuture},
 };
-
-use crate::render::renderer::ModelViewProjection;
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
@@ -77,8 +76,8 @@ pub struct QuadPipeline {
     vertices: Vec<QuadVertex>,
     indices: Vec<u32>,
     buffer_data: Vec<QuadBufferData>,
-    uniform_mvp_buffer: Arc<CpuBufferPool<vs::ty::MVP>>,
-    uniform_mvp_buffer_dev: Arc<DeviceLocalBuffer<vs::ty::MVP>>,
+    uniform_buffer: Arc<CpuBufferPool<vs::ty::UniformBufferObject>>,
+    uniform_buffer_dev: Arc<DeviceLocalBuffer<vs::ty::UniformBufferObject>>,
     uniform_mvp_ds: Arc<PersistentDescriptorSet>,
 }
 
@@ -106,11 +105,11 @@ impl QuadPipeline {
         };
 
         // create cpu and gpu buffers (we will copy data between them each frame)
-        let uniform_mvp_buffer = Arc::new(CpuBufferPool::<vs::ty::MVP>::new(
+        let uniform_mvp_buffer = Arc::new(CpuBufferPool::<vs::ty::UniformBufferObject>::new(
             gfx_queue.device().clone(),
             BufferUsage::transfer_src(),
         ));
-        let uniform_mvp_buffer_dev = DeviceLocalBuffer::<vs::ty::MVP>::new(
+        let uniform_mvp_buffer_dev = DeviceLocalBuffer::<vs::ty::UniformBufferObject>::new(
             gfx_queue.device().clone(),
             BufferUsage::uniform_buffer_transfer_dst(),
             [gfx_queue.family()],
@@ -136,8 +135,8 @@ impl QuadPipeline {
             vertices: Vec::with_capacity(max_quads * 4),
             indices: Vec::with_capacity(max_quads * 6),
             buffer_data: Vec::new(),
-            uniform_mvp_buffer,
-            uniform_mvp_buffer_dev,
+            uniform_buffer: uniform_mvp_buffer,
+            uniform_buffer_dev: uniform_mvp_buffer_dev,
             uniform_mvp_ds,
         }
     }
@@ -223,12 +222,10 @@ impl QuadPipeline {
         Some((command_buffer, future))
     }
 
-    pub fn copy_uniforms(&mut self, mvp: &ModelViewProjection) -> Result<PrimaryAutoCommandBuffer> {
-        let subbuffer = self.uniform_mvp_buffer.next(vs::ty::MVP {
-            model: mvp.model.into(),
-            view: mvp.view.into(),
-            proj: mvp.proj.into(),
-        })?;
+    pub fn copy_uniforms(&mut self, mvp: Matrix4<f32>) -> Result<PrimaryAutoCommandBuffer> {
+        let subbuffer = self
+            .uniform_buffer
+            .next(vs::ty::UniformBufferObject { mvp: mvp.into() })?;
 
         let mut cbb = AutoCommandBufferBuilder::primary(
             self.gfx_queue.device().clone(),
@@ -237,7 +234,7 @@ impl QuadPipeline {
         )?;
         cbb.copy_buffer(CopyBufferInfo::buffers(
             subbuffer,
-            self.uniform_mvp_buffer_dev.clone(),
+            self.uniform_buffer_dev.clone(),
         ))?;
         let cb = cbb.build()?;
 
@@ -300,11 +297,9 @@ pub mod vs {
 #version 450
 
 // uniforms
-layout(binding = 0) uniform MVP {
-    mat4 model;
-    mat4 view;
-    mat4 proj;
-} mvp;
+layout(binding = 0) uniform UniformBufferObject  {
+    mat4 mvp;
+} ubo;
 
 // inputs
 layout(location = 0) in vec3 position;
@@ -315,7 +310,7 @@ layout(location = 0) out vec4 frag_Color;
 
 void main() {
     frag_Color = color;
-    gl_Position = mvp.proj * mvp.view * mvp.model * vec4(position, 1.0);
+    gl_Position = ubo.mvp * vec4(position, 1.0);
 }"
     }
 }

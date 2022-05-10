@@ -1,5 +1,6 @@
 use std::{error::Error, result, sync::Arc};
 
+use cgmath::Matrix4;
 use vulkano::{
     command_buffer::{
         AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, SubpassContents,
@@ -12,7 +13,6 @@ use vulkano::{
 };
 
 use super::pipeline::QuadPipeline;
-use crate::render::renderer::ModelViewProjection;
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
@@ -63,7 +63,7 @@ impl QuadRenderPass {
         before_future: Box<dyn GpuFuture>,
         image_view: Arc<dyn ImageViewAbstract>,
         clear_value: [f32; 4],
-        mvp: &ModelViewProjection,
+        mvp: Matrix4<f32>,
     ) -> Box<dyn GpuFuture> {
         // create command buffer for copying uniform data
         let uniforms_cb = self
