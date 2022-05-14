@@ -1,6 +1,6 @@
 use std::{error::Error, result, sync::Arc};
 
-use cgmath::Matrix4;
+use cgmath::{Matrix4, Vector2, Vector4};
 use vulkano::{
     command_buffer::{
         AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, SubpassContents,
@@ -73,7 +73,7 @@ impl QuadRenderPass {
 
         // create command buffer for render pass
         let (renderpass_cb, renderpass_future) =
-            self.renderpass_cb(image_view, clear_value).unwrap();
+            self.gen_command_buffer(image_view, clear_value).unwrap();
 
         // Execute command buffers
         let after_future = before_future
@@ -86,11 +86,11 @@ impl QuadRenderPass {
         after_future.boxed()
     }
 
-    pub fn draw_quad(&mut self, color: &[f32; 4]) {
-        self.pipeline.add_quad(color)
+    pub fn draw_quad(&mut self, position: Vector2<f32>, size: Vector2<f32>, color: Vector4<f32>) {
+        self.pipeline.add_quad(position, size, color)
     }
 
-    fn renderpass_cb(
+    fn gen_command_buffer(
         &mut self,
         image_view: Arc<dyn ImageViewAbstract>,
         clear_value: [f32; 4],

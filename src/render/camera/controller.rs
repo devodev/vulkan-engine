@@ -1,8 +1,7 @@
 use std::ops::{Add, Mul, Sub};
 
 use cgmath::{EuclideanSpace, InnerSpace, Matrix4, Point3, SquareMatrix, Vector3};
-use log::debug;
-use winit::event::{DeviceEvent, ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 use super::ortho::CameraOrthographic;
 
@@ -68,6 +67,7 @@ impl CameraController {
     }
 
     pub fn view_projection_matrix(&self) -> Matrix4<f32> {
+        //self.view.mul(self.camera.projection_matrix())
         self.camera.projection_matrix().mul(self.view)
     }
 

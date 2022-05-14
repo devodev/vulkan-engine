@@ -1,7 +1,7 @@
-use std::{error::Error, result, sync::Arc};
+use std::{error::Error, ops::Mul, result, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
-use cgmath::Matrix4;
+use cgmath::{Matrix4, Vector2, Vector3, Vector4};
 use vulkano::{
     buffer::{BufferUsage, CpuBufferPool, DeviceLocalBuffer, ImmutableBuffer},
     command_buffer::{
@@ -50,11 +50,11 @@ impl QuadVertex {
 // 3 +--------------+ 2
 //
 const QUAD_INDICES: [u32; 6] = [0, 1, 2, 2, 3, 0];
-const QUAD_VERTICES: [[f32; 3]; 4] = [
-    [-0.5, 0.5, 0.0],
-    [0.5, 0.5, 0.0],
-    [0.5, -0.5, 0.0],
-    [-0.5, -0.5, 0.0],
+const QUAD_VERTICES: [Vector3<f32>; 4] = [
+    Vector3::new(-0.5, 0.5, 0.0),
+    Vector3::new(0.5, 0.5, 0.0),
+    Vector3::new(0.5, -0.5, 0.0),
+    Vector3::new(-0.5, -0.5, 0.0),
 ];
 
 const DEFAULT_MAX_QUADS: usize = 2000;
@@ -141,7 +141,7 @@ impl QuadPipeline {
         }
     }
 
-    pub fn add_quad(&mut self, color: &[f32; 4]) {
+    pub fn add_quad(&mut self, position: Vector2<f32>, size: Vector2<f32>, color: Vector4<f32>) {
         if self.quads_count >= self.max_quads {
             // we must flush our current vertices/indices
             self.flush_batch();
@@ -153,8 +153,17 @@ impl QuadPipeline {
             .extend(QUAD_INDICES.into_iter().map(|i| i + offset));
 
         // add vertices
-        self.vertices
-            .extend(QUAD_VERTICES.iter().map(|qv| QuadVertex::new(qv, color)));
+        let translation = Matrix4::from_translation(Vector3::new(position.x, position.y, 1.0));
+        let scale = Matrix4::from_nonuniform_scale(size.x, size.y, 1.0);
+        self.vertices.extend(QUAD_VERTICES.iter().map(|qv| {
+            QuadVertex::new(
+                &scale
+                    .mul(translation.mul(Vector4::new(qv.x, qv.y, qv.z, 1.0)))
+                    .truncate()
+                    .into(),
+                &color.into(),
+            )
+        }));
 
         // bump quad count
         self.quads_count += 1;
@@ -246,8 +255,6 @@ impl QuadPipeline {
             return;
         }
 
-        let quads_count = self.quads_count;
-
         // create vertex and index buffer from quad renderer
         let (vertex_buffer, vb_future) = ImmutableBuffer::from_iter(
             self.vertices.clone(),
@@ -264,6 +271,9 @@ impl QuadPipeline {
 
         // join both futures
         let future = Box::new(vb_future.join(ib_future));
+
+        // save quads_count before reset
+        let quads_count = self.quads_count;
 
         // reset batcher values
         self.reset_batch();

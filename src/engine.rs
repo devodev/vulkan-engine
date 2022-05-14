@@ -1,5 +1,6 @@
-use std::{error::Error, result, sync::Arc};
+use std::{error::Error, ops::Add, result, sync::Arc};
 
+use cgmath::{Vector2, Vector4};
 use gameloop::GameLoop;
 use log::debug;
 use winit::{
@@ -168,9 +169,19 @@ impl Engine {
                         }
                         gameloop::FrameAction::Render { interpolation: _ } => {
                             let after_future = renderer.begin().unwrap();
-                            let quad_color = &[1.0, 0.9, 0.0, 1.0];
-                            for _ in 1..1000 {
-                                renderer.draw_quad(quad_color);
+
+                            let position = Vector2::new(0.0, 0.0);
+                            let size = Vector2::new(0.2, 0.2);
+
+                            for x in (-50..50).step_by(1) {
+                                for y in (-50..50).step_by(1) {
+                                    let x = x as f32 * 0.1;
+                                    let y = y as f32 * 0.1;
+                                    let pos = Vector2::new(x, y).add(position);
+                                    let color =
+                                        Vector4::new((x + 5.0) / 10.0, 0.4, (y + 5.0) / 10.0, 0.7);
+                                    renderer.draw_quad(pos, size, color);
+                                }
                             }
                             renderer.end(after_future, camera_controller.view_projection_matrix());
                         }

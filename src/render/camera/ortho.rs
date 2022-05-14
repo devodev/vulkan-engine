@@ -29,8 +29,8 @@ impl CameraOrthographic {
 
     pub fn set_zoom(&mut self, amount: f32) {
         self.zoom += amount;
-        if self.zoom < 0.0 {
-            self.zoom = 0.0;
+        if self.zoom < 0.1 {
+            self.zoom = 0.1;
         }
         self.compute_projection_matrix()
     }

@@ -1,9 +1,8 @@
 use std::error::Error;
-use std::ops::Mul;
 use std::result;
 use std::sync::Arc;
 
-use cgmath::{Matrix4, SquareMatrix};
+use cgmath::{Matrix4, SquareMatrix, Vector2, Vector4};
 use log::error;
 use vulkano::swapchain::AcquireError;
 use vulkano::sync::{FlushError, GpuFuture};
@@ -89,8 +88,9 @@ impl Renderer2D {
     }
 
     pub fn end(&mut self, after_future: Box<dyn GpuFuture>, vp: Matrix4<f32>) {
-        let model = Matrix4::identity();
-        let mvp = model.mul(vp);
+        //let model = Matrix4::identity();
+        // let mvp = model.mul(vp);
+        let mvp = Matrix4::identity();
         // submit graphics quads render pass (submit command buffer)
         let render_future = self.render_pass.render(
             after_future,
@@ -133,8 +133,8 @@ impl Renderer2D {
         }
     }
 
-    pub fn draw_quad(&mut self, color: &[f32; 4]) {
-        self.render_pass.draw_quad(color)
+    pub fn draw_quad(&mut self, position: Vector2<f32>, size: Vector2<f32>, color: Vector4<f32>) {
+        self.render_pass.draw_quad(position, size, color)
     }
 
     fn recreate_swapchain_and_views(&mut self) {
