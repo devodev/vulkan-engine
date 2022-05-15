@@ -59,7 +59,7 @@ const QUAD_VERTICES: [Vector3<f32>; 4] = [
     Vector3::new(-0.5, -0.5, 0.0),
 ];
 
-const DEFAULT_MAX_QUADS: usize = 2000;
+const DEFAULT_MAX_QUADS: usize = 1000;
 
 struct QuadBufferData {
     quads_count: usize,
@@ -224,6 +224,7 @@ impl QuadPipeline {
 
             // record draw commands
             for data in self.buffer_data.drain(..) {
+                TIME!("commandbuffer record buffer_data");
                 future = Box::new(future.join(data.future));
 
                 builder

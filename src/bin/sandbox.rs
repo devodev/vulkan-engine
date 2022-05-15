@@ -66,8 +66,8 @@ impl Application for Sandbox {
         ctx.set_background_color(&[0.0, 0.4, 1.0, 1.0]);
 
         // compute quads
-        let x_count = 200;
-        let y_count = 200;
+        let x_count = 100;
+        let y_count = 100;
         for x in (-x_count / 2..x_count / 2).step_by(1) {
             for y in (-y_count / 2..y_count / 2).step_by(1) {
                 let x = x as f32 * 0.1;
