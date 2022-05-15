@@ -150,18 +150,13 @@ impl Engine {
         // event_loop.run() hijacks the main thread and calls std::process::exit when
         // done anything that has not been moved in the closure will not be dropped
         event_loop.run(move |event, _, control_flow| {
+            renderer.on_event(&event);
             match event {
                 Event::WindowEvent {
                     event: WindowEvent::CloseRequested,
                     ..
                 } => {
                     *control_flow = ControlFlow::Exit;
-                }
-                Event::WindowEvent {
-                    event: WindowEvent::Resized(_),
-                    ..
-                } => {
-                    renderer.window_resized();
                 }
                 Event::MainEventsCleared => {
                     // NOTE: the MainEventsCleared event "will be emitted when all input events

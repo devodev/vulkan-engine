@@ -8,6 +8,7 @@ use log::error;
 use vulkano::swapchain::AcquireError;
 use vulkano::sync::{FlushError, GpuFuture};
 use vulkano::{swapchain, sync};
+use winit::event::{Event, WindowEvent};
 use winit::window::Window;
 
 use super::quad::QuadRenderPass;
@@ -56,6 +57,16 @@ impl Renderer2D {
         };
 
         Ok(r)
+    }
+
+    pub fn on_event(&mut self, event: &Event<()>) {
+        if let Event::WindowEvent {
+            event: WindowEvent::Resized(_),
+            ..
+        } = event
+        {
+            self.window_resized();
+        }
     }
 
     pub fn set_background_color(&mut self, c: &[f32; 4]) {
