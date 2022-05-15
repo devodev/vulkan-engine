@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://github.com/devodev/vulkan-engine">
-    <img alt="sandbox1" src="assets/sandbox2.png" width="800">
+    <img alt="sandbox1" src="assets/sandbox3.png" width="800">
   </a>
 </p>
 
