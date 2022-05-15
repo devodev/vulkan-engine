@@ -17,6 +17,15 @@ type Result<T> = result::Result<T, Box<dyn Error>>;
 
 const DEFAULT_BACKGROUND_COLOR: [f32; 4] = [0.0, 0.4, 1.0, 1.0];
 
+// Vulkan clip space has inverted Y and half Z.
+#[rustfmt::skip]
+const VULKAN_TO_GL_PROJ: Matrix4<f32> = Matrix4::new(
+    1.0, 0.0, 0.0, 0.0,
+    0.0, -1.0, 0.0, 0.0,
+    0.0, 0.0, 0.5, 0.0,
+    0.0, 0.0, 0.5, 1.0,
+);
+
 // inspiration: https://github.com/vulkano-rs/vulkano/tree/master/examples/src/bin/interactive_fractal
 pub struct Renderer2D {
     device: Device,
@@ -91,6 +100,21 @@ impl Renderer2D {
     pub fn end(&mut self, after_future: Box<dyn GpuFuture>, vp: Matrix4<f32>) {
         let model = Matrix4::identity();
         let mvp = model.mul(vp);
+        // Pre-multiply mvp matrix with this magix matrix
+        // to adapt to Vulkan coordinate system.
+        //
+        // It involves flipping Y to point downwards and moving
+        // depth range from 0 <-> 1 to -1 <-> 1.
+        //
+        // This avoids doing it on the GPU with:
+        //   account for vulkan Y pointing downwards
+        //   gl_Position.y = -gl_Position.y;
+        //   account for vulkan depth range being 0.0<->1.0
+        //   gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
+        //
+        // ref: https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
+        let mvp = VULKAN_TO_GL_PROJ.mul(mvp);
+
         // submit graphics quads render pass (submit command buffer)
         let render_future = self.render_pass.render(
             after_future,
