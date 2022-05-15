@@ -15,7 +15,7 @@ use winit::{
     window::{Fullscreen, Icon, Window, WindowBuilder},
 };
 
-use crate::render::Renderer2D;
+use crate::{debug::Timing, debug::TIME, render::Renderer2D};
 use crate::{
     input::InputSystem,
     render::camera::{CameraController, CameraOrthographic},
@@ -189,6 +189,7 @@ impl Engine {
 
                         match action {
                             gameloop::FrameAction::Tick => {
+                                TIME!("gameloop::FrameAction::Tick");
                                 // update state
                                 app.on_update(Context::new(delta_time, &mut renderer, &input));
                                 camera_controller.on_update(Context::new(
@@ -198,12 +199,14 @@ impl Engine {
                                 ));
                             }
                             gameloop::FrameAction::Render { interpolation: _ } => {
+                                TIME!("gameloop::FrameAction::Render");
                                 let render_start = Instant::now();
 
                                 let after_future = renderer.begin().unwrap();
 
                                 let render_elapsed = Instant::now().duration_since(render_start);
                                 debug!("render elapsed (renderer.begin): {:?}", render_elapsed);
+                                let render_start = Instant::now();
 
                                 app.on_render(Context::new(delta_time, &mut renderer, &input));
 

@@ -1,3 +1,4 @@
+mod debug;
 mod engine;
 mod input;
 mod render;
