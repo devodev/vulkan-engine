@@ -19,7 +19,7 @@ const DEFAULT_BACKGROUND_COLOR: [f32; 4] = [0.0, 0.4, 1.0, 1.0];
 
 // Vulkan clip space has inverted Y and half Z.
 #[rustfmt::skip]
-const VULKAN_TO_GL_PROJ: Matrix4<f32> = Matrix4::new(
+const VULKAN_COORD_MAGIC_PROJ: Matrix4<f32> = Matrix4::new(
     1.0, 0.0, 0.0, 0.0,
     0.0, -1.0, 0.0, 0.0,
     0.0, 0.0, 0.5, 0.0,
@@ -113,7 +113,7 @@ impl Renderer2D {
         //   gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
         //
         // ref: https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
-        let mvp = VULKAN_TO_GL_PROJ.mul(mvp);
+        let mvp = VULKAN_COORD_MAGIC_PROJ.mul(mvp);
 
         // submit graphics quads render pass (submit command buffer)
         let render_future = self.render_pass.render(
