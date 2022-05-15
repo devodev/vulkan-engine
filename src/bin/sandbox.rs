@@ -31,7 +31,7 @@ fn main() {
 
     let enable_renderer_debug = env::var("RENDERER_DEBUG").is_ok();
 
-    let app = Sandbox {};
+    let app = Sandbox::new();
     // create and run engine
     // engine takes ownership of thread and will call std::process::exit for us
     EngineBuilder::new(Box::new(app))
@@ -45,6 +45,12 @@ fn main() {
 }
 
 struct Sandbox {}
+
+impl Sandbox {
+    fn new() -> Self {
+        Self {}
+    }
+}
 
 impl Application for Sandbox {
     fn on_init(&mut self, mut ctx: core::Context) {
