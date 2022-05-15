@@ -1,17 +1,25 @@
-use std::{error::Error, result, sync::Arc};
+use std::{
+    error::Error,
+    result,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use cgmath::{Vector2, Vector4};
 use gameloop::GameLoop;
 use log::debug;
 use winit::{
     dpi::{LogicalSize, Size},
-    event::{Event, WindowEvent},
+    event::{Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Fullscreen, Icon, Window, WindowBuilder},
 };
 
-use crate::render::camera::{CameraController, CameraOrthographic};
 use crate::render::Renderer2D;
+use crate::{
+    input::InputSystem,
+    render::camera::{CameraController, CameraOrthographic},
+};
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
@@ -107,6 +115,7 @@ pub struct Engine {
     window_builder: Option<WindowBuilder>,
     renderer: Option<Renderer2D>,
     renderer_debug: bool,
+    input: Option<InputSystem>,
 }
 
 impl Engine {
@@ -116,6 +125,7 @@ impl Engine {
             window_builder: Some(wb),
             renderer: None,
             renderer_debug,
+            input: Some(InputSystem::new()),
         }
     }
 
@@ -135,6 +145,9 @@ impl Engine {
             .take()
             .ok_or("Couldnt take renderer. Did you forget to call self.init_renderer() ?")?;
 
+        // input system
+        let mut input = self.input.take().ok_or("Count take input")?;
+
         // application
         let mut app = self.app.take().ok_or("Couldnt take app")?;
 
@@ -143,14 +156,19 @@ impl Engine {
         let max_frameskip = 5;
         let game_loop = GameLoop::new(tps, max_frameskip)?;
 
+        // delta time
+        let mut last_time = Instant::now();
+
         // init phase
-        app.on_init(Context::new(&mut renderer));
+        app.on_init(Context::new(Duration::ZERO, &mut renderer, &input));
 
         debug!("start event loop");
         // event_loop.run() hijacks the main thread and calls std::process::exit when
         // done anything that has not been moved in the closure will not be dropped
         event_loop.run(move |event, _, control_flow| {
+            input.on_event(&event);
             renderer.on_event(&event);
+
             match event {
                 Event::WindowEvent {
                     event: WindowEvent::CloseRequested,
@@ -162,23 +180,47 @@ impl Engine {
                     // NOTE: the MainEventsCleared event "will be emitted when all input events
                     //       have been processed and redraw processing is about to begin".
                     for action in game_loop.actions() {
+                        // delta time
+                        let current_time = Instant::now();
+                        let delta_time = current_time - last_time;
+                        last_time = current_time;
+
+                        debug!("delta: {:?} | action: {:?}", delta_time, action);
+
                         match action {
                             gameloop::FrameAction::Tick => {
                                 // update state
-                                app.on_update(Context::new(&mut renderer))
+                                app.on_update(Context::new(delta_time, &mut renderer, &input));
+                                camera_controller.on_update(Context::new(
+                                    delta_time,
+                                    &mut renderer,
+                                    &input,
+                                ));
                             }
                             gameloop::FrameAction::Render { interpolation: _ } => {
+                                let render_start = Instant::now();
+
                                 let after_future = renderer.begin().unwrap();
 
-                                app.on_render(Context::new(&mut renderer));
+                                let render_elapsed = Instant::now().duration_since(render_start);
+                                debug!("render elapsed (renderer.begin): {:?}", render_elapsed);
+
+                                app.on_render(Context::new(delta_time, &mut renderer, &input));
+
+                                let render_elapsed = Instant::now().duration_since(render_start);
+                                debug!("render elapsed (app.on_render): {:?}", render_elapsed);
+                                let render_start = Instant::now();
 
                                 renderer
                                     .end(after_future, camera_controller.view_projection_matrix());
+
+                                let render_elapsed = Instant::now().duration_since(render_start);
+                                debug!("render elapsed (renderer.end): {:?}", render_elapsed);
                             }
                         }
                     }
                 }
-                _ => camera_controller.on_update(&event),
+                _ => {}
             }
         });
     }
@@ -207,12 +249,22 @@ impl Engine {
 }
 
 pub struct Context<'a> {
+    delta_time: Duration,
     renderer: &'a mut Renderer2D,
+    input: &'a InputSystem,
 }
 
 impl<'a> Context<'a> {
-    fn new(renderer: &'a mut Renderer2D) -> Self {
-        Self { renderer }
+    fn new(delta: Duration, renderer: &'a mut Renderer2D, input: &'a InputSystem) -> Self {
+        Self {
+            delta_time: delta,
+            renderer,
+            input,
+        }
+    }
+
+    pub fn delta_time(&self) -> Duration {
+        self.delta_time
     }
 
     pub fn set_background_color(&mut self, c: &[f32; 4]) {
@@ -221,6 +273,14 @@ impl<'a> Context<'a> {
 
     pub fn draw_quad(&mut self, position: Vector2<f32>, size: Vector2<f32>, color: Vector4<f32>) {
         self.renderer.draw_quad(position, size, color)
+    }
+
+    pub fn is_key_pressed(&self, key: VirtualKeyCode) -> bool {
+        self.input.is_key_pressed(key)
+    }
+
+    pub fn is_key_released(&self, key: VirtualKeyCode) -> bool {
+        self.input.is_key_released(key)
     }
 }
 

@@ -1,9 +1,10 @@
 use std::ops::{Add, Mul, Sub};
 
 use cgmath::{EuclideanSpace, InnerSpace, Matrix4, Point3, SquareMatrix, Vector3};
-use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+use winit::event::VirtualKeyCode;
 
 use super::ortho::CameraOrthographic;
+use crate::Context;
 
 const HORIZONTAL_VEC: Vector3<f32> = Vector3::new(1.0, 0.0, 0.0);
 const VERTICAL_VEC: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
@@ -32,38 +33,27 @@ impl CameraController {
         controller
     }
 
-    pub fn on_update(&mut self, event: &Event<()>) {
+    pub fn on_update(&mut self, ctx: Context) {
         self.compute_view_matrix();
-        match event {
-            Event::WindowEvent {
-                event: WindowEvent::Resized(size),
-                ..
-            } => self.camera.resize(size.width, size.height),
-            Event::WindowEvent {
-                event:
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state,
-                                virtual_keycode,
-                                ..
-                            },
-                        ..
-                    },
-                ..
-            } => match state {
-                ElementState::Pressed => match virtual_keycode {
-                    Some(VirtualKeyCode::Q) => self.move_backward(self.speed_base),
-                    Some(VirtualKeyCode::E) => self.move_forward(self.speed_base),
-                    Some(VirtualKeyCode::W) => self.move_up(self.speed_base),
-                    Some(VirtualKeyCode::S) => self.move_down(self.speed_base),
-                    Some(VirtualKeyCode::A) => self.move_left(self.speed_base),
-                    Some(VirtualKeyCode::D) => self.move_right(self.speed_base),
-                    _ => (),
-                },
-                ElementState::Released => {}
-            },
-            _ => (),
+
+        // move camera
+        if ctx.is_key_pressed(VirtualKeyCode::Q) {
+            self.move_backward(self.speed_base)
+        }
+        if ctx.is_key_pressed(VirtualKeyCode::E) {
+            self.move_forward(self.speed_base)
+        }
+        if ctx.is_key_pressed(VirtualKeyCode::W) {
+            self.move_up(self.speed_base)
+        }
+        if ctx.is_key_pressed(VirtualKeyCode::S) {
+            self.move_down(self.speed_base)
+        }
+        if ctx.is_key_pressed(VirtualKeyCode::A) {
+            self.move_left(self.speed_base)
+        }
+        if ctx.is_key_pressed(VirtualKeyCode::D) {
+            self.move_right(self.speed_base)
         }
     }
 
