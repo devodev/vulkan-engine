@@ -26,14 +26,10 @@ impl Drop for Timing {
 
 macro_rules! TIME {
     () => {
-        let _x = Timing::new("TIME!");
+        let _x = $crate::debug::Timing::new("TIME!");
     };
-    ($base: expr) => {
-        let _x = Timing::new($base);
-    };
-    ($base: expr, $($args:tt)*) => {
-        let _msg = format!($base, $($args)*);
-        let _x = Timing::new(&_msg);
+    ($msg: expr) => {
+        let _x = $crate::debug::Timing::new($msg);
     };
 }
 pub(crate) use TIME;

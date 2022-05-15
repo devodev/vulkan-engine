@@ -22,6 +22,8 @@ use vulkano::{
     sync::{self, GpuFuture},
 };
 
+use crate::debug::{self, TIME};
+
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
 #[repr(C)]
@@ -179,6 +181,7 @@ impl QuadPipeline {
         &mut self,
         viewport_dimensions: [u32; 2],
     ) -> Option<(SecondaryAutoCommandBuffer, Box<dyn GpuFuture>)> {
+        TIME!("pipeline.draw");
         // flush remaining quads
         self.flush_batch();
 
@@ -257,6 +260,7 @@ impl QuadPipeline {
     }
 
     fn flush_batch(&mut self) {
+        debug::TIME!("pipeline.flush_batch");
         if self.quads_count == 0 {
             return;
         }

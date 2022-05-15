@@ -44,11 +44,17 @@ fn main() {
         .expect("failed to run engine");
 }
 
-struct Sandbox {}
+struct Sandbox {
+    position: Vector2<f32>,
+    size: Vector2<f32>,
+}
 
 impl Sandbox {
     fn new() -> Self {
-        Self {}
+        Self {
+            position: Vector2::new(0.0, 0.0),
+            size: Vector2::new(0.1, 0.1),
+        }
     }
 }
 
@@ -60,16 +66,15 @@ impl Application for Sandbox {
     fn on_update(&mut self, _: core::Context) {}
 
     fn on_render(&mut self, mut ctx: core::Context) {
-        let position = Vector2::new(0.0, 0.0);
-        let size = Vector2::new(0.1, 0.1);
-
-        for x in (-50..50).step_by(1) {
-            for y in (-50..50).step_by(1) {
+        let x_count = 100;
+        let y_count = 100;
+        for x in (-x_count / 2..x_count / 2).step_by(1) {
+            for y in (-y_count / 2..y_count / 2).step_by(1) {
                 let x = x as f32 * 0.1;
                 let y = y as f32 * 0.1;
-                let pos = Vector2::new(x, y).add(position);
+                let pos = Vector2::new(x, y).add(self.position);
                 let color = Vector4::new((x + 5.0) / 10.0, 0.4, (y + 5.0) / 10.0, 0.7);
-                ctx.draw_quad(pos, size, color);
+                ctx.draw_quad(pos, self.size, color);
             }
         }
     }
