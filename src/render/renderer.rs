@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::ops::Mul;
 use std::result;
 use std::sync::Arc;
 
@@ -88,9 +89,8 @@ impl Renderer2D {
     }
 
     pub fn end(&mut self, after_future: Box<dyn GpuFuture>, vp: Matrix4<f32>) {
-        //let model = Matrix4::identity();
-        // let mvp = model.mul(vp);
-        let mvp = Matrix4::identity();
+        let model = Matrix4::identity();
+        let mvp = model.mul(vp);
         // submit graphics quads render pass (submit command buffer)
         let render_future = self.render_pass.render(
             after_future,

@@ -8,6 +8,15 @@ use super::ortho::CameraOrthographic;
 const HORIZONTAL_VEC: Vector3<f32> = Vector3::new(1.0, 0.0, 0.0);
 const VERTICAL_VEC: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
 
+// Vulkan clip space has inverted Y and half Z.
+#[rustfmt::skip]
+const VULKAN_TO_GL_PROJ: Matrix4<f32> = Matrix4::new(
+    1.0, 0.0, 0.0, 0.0,
+    0.0, -1.0, 0.0, 0.0,
+    0.0, 0.0, 0.5, 0.0,
+    0.0, 0.0, 0.5, 1.0,
+);
+
 #[derive(Debug, Clone)]
 pub struct CameraController {
     speed_base: f32,
@@ -21,9 +30,9 @@ pub struct CameraController {
 impl CameraController {
     pub fn new(camera: CameraOrthographic) -> Self {
         let mut controller = Self {
-            speed_base: 2.0,
+            speed_base: 0.1,
             pos: Vector3::new(0.0, 0.0, 2.0),
-            target: Vector3::new(0.0, 0.0, -0.5),
+            target: Vector3::new(0.0, 0.0, -1.0),
             up: Vector3::new(0.0, 1.0, 0.0),
             camera,
             view: Matrix4::identity(),
@@ -33,6 +42,7 @@ impl CameraController {
     }
 
     pub fn on_update(&mut self, event: &Event<()>) {
+        self.compute_view_matrix();
         match event {
             Event::WindowEvent {
                 event: WindowEvent::Resized(size),
@@ -60,19 +70,32 @@ impl CameraController {
                     Some(VirtualKeyCode::D) => self.move_right(self.speed_base),
                     _ => (),
                 },
-                _ => (),
+                ElementState::Released => {}
             },
             _ => (),
         }
     }
 
     pub fn view_projection_matrix(&self) -> Matrix4<f32> {
-        //self.view.mul(self.camera.projection_matrix())
-        self.camera.projection_matrix().mul(self.view)
+        // Pre-multiply projection matrix with this magix matrix
+        // to adapt to Vulkan coordinate system.
+        //
+        // It involves flipping Y to point downwards and moving
+        // depth range from 0 <-> 1 to -1 <-> 1.
+        //
+        // This avoids doing it on the GPU with:
+        //   account for vulkan Y pointing downwards
+        //   gl_Position.y = -gl_Position.y;
+        //   account for vulkan depth range being 0.0<->1.0
+        //   gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
+        //
+        // ref: https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
+        let proj = VULKAN_TO_GL_PROJ.mul(self.camera.projection_matrix());
+        proj.mul(self.view)
     }
 
     fn compute_view_matrix(&mut self) {
-        self.view = Matrix4::look_at_lh(
+        self.view = Matrix4::look_at_rh(
             Point3::from_vec(self.pos),
             Point3::from_vec(self.pos.add(self.target)),
             self.up,

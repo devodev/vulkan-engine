@@ -171,7 +171,7 @@ impl Engine {
                             let after_future = renderer.begin().unwrap();
 
                             let position = Vector2::new(0.0, 0.0);
-                            let size = Vector2::new(0.2, 0.2);
+                            let size = Vector2::new(0.1, 0.1);
 
                             for x in (-50..50).step_by(1) {
                                 for y in (-50..50).step_by(1) {

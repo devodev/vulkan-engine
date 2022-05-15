@@ -1,4 +1,4 @@
-use std::{error::Error, ops::Mul, result, sync::Arc};
+use std::{error::Error, fmt::Debug, ops::Mul, result, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
 use cgmath::{Matrix4, Vector2, Vector3, Vector4};
@@ -64,6 +64,12 @@ struct QuadBufferData {
     vertex_buffer: Arc<ImmutableBuffer<[QuadVertex]>>,
     index_buffer: Arc<ImmutableBuffer<[u32]>>,
     future: Box<dyn GpuFuture>,
+}
+
+impl Debug for QuadBufferData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "QuadBufferData{{quads_count: {}}}", self.quads_count)
+    }
 }
 
 pub struct QuadPipeline {
@@ -220,7 +226,7 @@ impl QuadPipeline {
                 builder
                     .bind_vertex_buffers(0, data.vertex_buffer)
                     .bind_index_buffer(data.index_buffer)
-                    .draw_indexed((data.quads_count * 6) as u32, 1, 0, 0, 0)
+                    .draw_indexed((data.quads_count * QUAD_INDICES.len()) as u32, 1, 0, 0, 0)
                     .unwrap();
             }
         }
