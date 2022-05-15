@@ -15,7 +15,7 @@ use crate::render::{Device, DeviceDefinition};
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
-const DEFAULT_BACKGROUND_COLOR: [f32; 4] = [0.0, 0.4, 1.0, 1.0];
+const DEFAULT_BACKGROUND_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
 // Vulkan clip space has inverted Y and half Z.
 #[rustfmt::skip]
@@ -58,9 +58,8 @@ impl Renderer2D {
         Ok(r)
     }
 
-    #[allow(dead_code)]
-    pub fn set_background_color(&mut self, c: [f32; 4]) {
-        self.background_color = c;
+    pub fn set_background_color(&mut self, c: &[f32; 4]) {
+        self.background_color = *c;
     }
 
     pub fn window_resized(&mut self) {

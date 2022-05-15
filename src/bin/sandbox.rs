@@ -1,6 +1,7 @@
-use core::EngineBuilder;
-use std::env;
+use core::{Application, EngineBuilder};
+use std::{env, ops::Add};
 
+use cgmath::{Vector2, Vector4};
 use log::LevelFilter;
 use winit::{
     dpi::{LogicalSize, Size},
@@ -30,9 +31,10 @@ fn main() {
 
     let enable_renderer_debug = env::var("RENDERER_DEBUG").is_ok();
 
+    let app = Sandbox {};
     // create and run engine
     // engine takes ownership of thread and will call std::process::exit for us
-    EngineBuilder::new()
+    EngineBuilder::new(Box::new(app))
         .with_window_size(Size::Logical(LogicalSize::new(1024.0, 768.0)))
         .with_window_title("Sandbox (Vulkan Engine)".to_owned())
         .with_window_icon(icon)
@@ -40,4 +42,29 @@ fn main() {
         .build()
         .run()
         .expect("failed to run engine");
+}
+
+struct Sandbox {}
+
+impl Application for Sandbox {
+    fn on_init(&mut self, mut ctx: core::Context) {
+        ctx.set_background_color(&[0.0, 0.4, 1.0, 1.0]);
+    }
+
+    fn on_update(&mut self, _: core::Context) {}
+
+    fn on_render(&mut self, mut ctx: core::Context) {
+        let position = Vector2::new(0.0, 0.0);
+        let size = Vector2::new(0.1, 0.1);
+
+        for x in (-50..50).step_by(1) {
+            for y in (-50..50).step_by(1) {
+                let x = x as f32 * 0.1;
+                let y = y as f32 * 0.1;
+                let pos = Vector2::new(x, y).add(position);
+                let color = Vector4::new((x + 5.0) / 10.0, 0.4, (y + 5.0) / 10.0, 0.7);
+                ctx.draw_quad(pos, size, color);
+            }
+        }
+    }
 }

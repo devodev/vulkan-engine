@@ -1,4 +1,4 @@
-use std::{error::Error, ops::Add, result, sync::Arc};
+use std::{error::Error, result, sync::Arc};
 
 use cgmath::{Vector2, Vector4};
 use gameloop::GameLoop;
@@ -15,8 +15,8 @@ use crate::render::Renderer2D;
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
-#[derive(Debug, Clone)]
 pub struct EngineBuilder {
+    app: Box<dyn Application>,
     window_size: Option<Size>,
     window_title: Option<String>,
     window_resizable: bool,
@@ -28,8 +28,18 @@ pub struct EngineBuilder {
 }
 
 impl EngineBuilder {
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new(app: Box<dyn Application>) -> Self {
+        Self {
+            app,
+            window_size: None,
+            window_title: Some("Vulkan Engine".to_owned()),
+            window_resizable: true,
+            window_fullscreen: None,
+            window_maximized: false,
+            window_visible: true,
+            window_icon: None,
+            renderer_debug: false,
+        }
     }
 
     pub fn with_window_size(mut self, s: Size) -> Self {
@@ -72,7 +82,7 @@ impl EngineBuilder {
         self
     }
 
-    pub fn build(&mut self) -> Engine {
+    pub fn build(mut self) -> Engine {
         let mut wb = WindowBuilder::new()
             .with_min_inner_size(Size::Logical(LogicalSize::new(320.0, 240.0)))
             .with_resizable(self.window_resizable)
@@ -88,34 +98,21 @@ impl EngineBuilder {
             wb = wb.with_title(window_title);
         }
 
-        Engine::new(wb, self.renderer_debug)
-    }
-}
-
-impl Default for EngineBuilder {
-    fn default() -> Self {
-        Self {
-            window_size: None,
-            window_title: Some("Vulkan Engine".to_owned()),
-            window_resizable: true,
-            window_fullscreen: None,
-            window_maximized: false,
-            window_visible: true,
-            window_icon: None,
-            renderer_debug: false,
-        }
+        Engine::new(self.app, wb, self.renderer_debug)
     }
 }
 
 pub struct Engine {
+    app: Option<Box<dyn Application>>,
     window_builder: Option<WindowBuilder>,
     renderer: Option<Renderer2D>,
     renderer_debug: bool,
 }
 
 impl Engine {
-    fn new(wb: WindowBuilder, renderer_debug: bool) -> Self {
+    fn new(app: Box<dyn Application>, wb: WindowBuilder, renderer_debug: bool) -> Self {
         Engine {
+            app: Some(app),
             window_builder: Some(wb),
             renderer: None,
             renderer_debug,
@@ -138,57 +135,56 @@ impl Engine {
             .take()
             .ok_or("Couldnt take renderer. Did you forget to call self.init_renderer() ?")?;
 
+        // application
+        let mut app = self.app.take().ok_or("Couldnt take app")?;
+
         // gameloop state
         let tps = 20;
         let max_frameskip = 5;
         let game_loop = GameLoop::new(tps, max_frameskip)?;
 
+        // init phase
+        app.on_init(Context::new(&mut renderer));
+
         debug!("start event loop");
         // event_loop.run() hijacks the main thread and calls std::process::exit when
         // done anything that has not been moved in the closure will not be dropped
-        event_loop.run(move |event, _, control_flow| match event {
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
-                *control_flow = ControlFlow::Exit;
-            }
-            Event::WindowEvent {
-                event: WindowEvent::Resized(_),
-                ..
-            } => {
-                renderer.window_resized();
-            }
-            Event::MainEventsCleared => {
-                // NOTE: the MainEventsCleared event "will be emitted when all input events
-                //       have been processed and redraw processing is about to begin".
-                for action in game_loop.actions() {
-                    match action {
-                        gameloop::FrameAction::Tick => {
-                            // update state
-                        }
-                        gameloop::FrameAction::Render { interpolation: _ } => {
-                            let after_future = renderer.begin().unwrap();
-
-                            let position = Vector2::new(0.0, 0.0);
-                            let size = Vector2::new(0.1, 0.1);
-
-                            for x in (-50..50).step_by(1) {
-                                for y in (-50..50).step_by(1) {
-                                    let x = x as f32 * 0.1;
-                                    let y = y as f32 * 0.1;
-                                    let pos = Vector2::new(x, y).add(position);
-                                    let color =
-                                        Vector4::new((x + 5.0) / 10.0, 0.4, (y + 5.0) / 10.0, 0.7);
-                                    renderer.draw_quad(pos, size, color);
-                                }
+        event_loop.run(move |event, _, control_flow| {
+            match event {
+                Event::WindowEvent {
+                    event: WindowEvent::CloseRequested,
+                    ..
+                } => {
+                    *control_flow = ControlFlow::Exit;
+                }
+                Event::WindowEvent {
+                    event: WindowEvent::Resized(_),
+                    ..
+                } => {
+                    renderer.window_resized();
+                }
+                Event::MainEventsCleared => {
+                    // NOTE: the MainEventsCleared event "will be emitted when all input events
+                    //       have been processed and redraw processing is about to begin".
+                    for action in game_loop.actions() {
+                        match action {
+                            gameloop::FrameAction::Tick => {
+                                // update state
+                                app.on_update(Context::new(&mut renderer))
                             }
-                            renderer.end(after_future, camera_controller.view_projection_matrix());
+                            gameloop::FrameAction::Render { interpolation: _ } => {
+                                let after_future = renderer.begin().unwrap();
+
+                                app.on_render(Context::new(&mut renderer));
+
+                                renderer
+                                    .end(after_future, camera_controller.view_projection_matrix());
+                            }
                         }
                     }
                 }
+                _ => camera_controller.on_update(&event),
             }
-            _ => camera_controller.on_update(&event),
         });
     }
 
@@ -213,4 +209,28 @@ impl Engine {
 
         Ok(())
     }
+}
+
+pub struct Context<'a> {
+    renderer: &'a mut Renderer2D,
+}
+
+impl<'a> Context<'a> {
+    fn new(renderer: &'a mut Renderer2D) -> Self {
+        Self { renderer }
+    }
+
+    pub fn set_background_color(&mut self, c: &[f32; 4]) {
+        self.renderer.set_background_color(c)
+    }
+
+    pub fn draw_quad(&mut self, position: Vector2<f32>, size: Vector2<f32>, color: Vector4<f32>) {
+        self.renderer.draw_quad(position, size, color)
+    }
+}
+
+pub trait Application {
+    fn on_init(&mut self, ctx: Context);
+    fn on_update(&mut self, ctx: Context);
+    fn on_render(&mut self, ctx: Context);
 }
