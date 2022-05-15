@@ -1,4 +1,4 @@
-use core::{Application, EngineBuilder};
+use core::{Application, EngineBuilder, TIME};
 use std::{env, ops::Add};
 
 use cgmath::{Vector2, Vector4};
@@ -47,6 +47,7 @@ fn main() {
 struct Sandbox {
     position: Vector2<f32>,
     size: Vector2<f32>,
+    quads: Vec<(Vector2<f32>, Vector4<f32>)>,
 }
 
 impl Sandbox {
@@ -54,28 +55,45 @@ impl Sandbox {
         Self {
             position: Vector2::new(0.0, 0.0),
             size: Vector2::new(0.1, 0.1),
+            quads: Vec::new(),
         }
     }
 }
 
 impl Application for Sandbox {
     fn on_init(&mut self, mut ctx: core::Context) {
+        TIME!("app.on_init");
         ctx.set_background_color(&[0.0, 0.4, 1.0, 1.0]);
-    }
 
-    fn on_update(&mut self, _: core::Context) {}
-
-    fn on_render(&mut self, mut ctx: core::Context) {
-        let x_count = 100;
-        let y_count = 100;
+        // compute quads
+        let x_count = 200;
+        let y_count = 200;
         for x in (-x_count / 2..x_count / 2).step_by(1) {
             for y in (-y_count / 2..y_count / 2).step_by(1) {
                 let x = x as f32 * 0.1;
                 let y = y as f32 * 0.1;
                 let pos = Vector2::new(x, y).add(self.position);
-                let color = Vector4::new((x + 5.0) / 10.0, 0.4, (y + 5.0) / 10.0, 0.7);
-                ctx.draw_quad(pos, self.size, color);
+                let x_multiplier = (x_count / 2) as f32 * 0.1;
+                let y_multiplier = (y_count / 2) as f32 * 0.1;
+                let color = Vector4::new(
+                    (x + x_multiplier) / (x_multiplier * 2.0),
+                    0.4,
+                    (y + y_multiplier) / (y_multiplier * 2.0),
+                    0.7,
+                );
+                self.quads.push((pos, color))
             }
+        }
+    }
+
+    fn on_update(&mut self, _: core::Context) {
+        TIME!("app.on_update");
+    }
+
+    fn on_render(&mut self, mut ctx: core::Context) {
+        TIME!("app.on_render");
+        for (pos, color) in &self.quads {
+            ctx.draw_quad(*pos, self.size, *color);
         }
     }
 }

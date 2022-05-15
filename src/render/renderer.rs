@@ -13,6 +13,7 @@ use winit::window::Window;
 
 use super::quad::QuadRenderPass;
 use crate::render::{Device, DeviceDefinition};
+use crate::TIME;
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
@@ -78,6 +79,7 @@ impl Renderer2D {
     }
 
     pub fn begin(&mut self) -> Result<Box<dyn GpuFuture>> {
+        TIME!("renderer.begin");
         self.previous_frame_end.as_mut().unwrap().cleanup_finished();
 
         if self.should_recreate_swapchain {
@@ -108,6 +110,7 @@ impl Renderer2D {
     }
 
     pub fn end(&mut self, after_future: Box<dyn GpuFuture>, vp: Matrix4<f32>) {
+        TIME!("renderer.end");
         let model = Matrix4::identity();
         let mvp = model.mul(vp);
         // Pre-multiply mvp matrix with this magix matrix

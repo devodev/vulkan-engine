@@ -31,3 +31,10 @@ winit = "0.26.1"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"
+
+[profile.release]
+# allow running: crago flamegraph
+debug = true
+
+[rust]
+debuginfo-level = 1

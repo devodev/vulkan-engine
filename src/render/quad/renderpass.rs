@@ -13,6 +13,7 @@ use vulkano::{
 };
 
 use super::pipeline::QuadPipeline;
+use crate::TIME;
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
@@ -65,6 +66,7 @@ impl QuadRenderPass {
         clear_value: [f32; 4],
         mvp: Matrix4<f32>,
     ) -> Box<dyn GpuFuture> {
+        TIME!("renderpass.render");
         // create command buffer for copying uniform data
         let uniforms_cb = self
             .pipeline

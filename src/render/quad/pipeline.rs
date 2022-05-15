@@ -22,7 +22,7 @@ use vulkano::{
     sync::{self, GpuFuture},
 };
 
-use crate::debug::{self, TIME};
+use crate::TIME;
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
@@ -260,7 +260,7 @@ impl QuadPipeline {
     }
 
     fn flush_batch(&mut self) {
-        debug::TIME!("pipeline.flush_batch");
+        TIME!("pipeline.flush_batch");
         if self.quads_count == 0 {
             return;
         }

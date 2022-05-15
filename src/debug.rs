@@ -17,19 +17,23 @@ impl Timing {
 }
 
 impl Drop for Timing {
-    #[inline]
     fn drop(&mut self) {
         let elapsed = Instant::now().duration_since(self.start);
         debug!("{}", format!("[{:?}] {}", elapsed, self.msg))
     }
 }
 
+#[macro_export]
+#[cfg(debug_assertions)]
 macro_rules! TIME {
-    () => {
-        let _x = $crate::debug::Timing::new("TIME!");
-    };
     ($msg: expr) => {
         let _x = $crate::debug::Timing::new($msg);
     };
 }
-pub(crate) use TIME;
+#[macro_export]
+#[cfg(not(debug_assertions))]
+macro_rules! TIME {
+    ($msg: expr) => {
+        ()
+    };
+}

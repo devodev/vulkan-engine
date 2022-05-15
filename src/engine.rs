@@ -15,11 +15,11 @@ use winit::{
     window::{Fullscreen, Icon, Window, WindowBuilder},
 };
 
-use crate::{debug::Timing, debug::TIME, render::Renderer2D};
 use crate::{
     input::InputSystem,
     render::camera::{CameraController, CameraOrthographic},
 };
+use crate::{render::Renderer2D, TIME};
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
@@ -200,25 +200,13 @@ impl Engine {
                             }
                             gameloop::FrameAction::Render { interpolation: _ } => {
                                 TIME!("gameloop::FrameAction::Render");
-                                let render_start = Instant::now();
 
                                 let after_future = renderer.begin().unwrap();
 
-                                let render_elapsed = Instant::now().duration_since(render_start);
-                                debug!("render elapsed (renderer.begin): {:?}", render_elapsed);
-                                let render_start = Instant::now();
-
                                 app.on_render(Context::new(delta_time, &mut renderer, &input));
-
-                                let render_elapsed = Instant::now().duration_since(render_start);
-                                debug!("render elapsed (app.on_render): {:?}", render_elapsed);
-                                let render_start = Instant::now();
 
                                 renderer
                                     .end(after_future, camera_controller.view_projection_matrix());
-
-                                let render_elapsed = Instant::now().duration_since(render_start);
-                                debug!("render elapsed (renderer.end): {:?}", render_elapsed);
                             }
                         }
                     }
