@@ -38,7 +38,9 @@ pub struct Renderer2D {
     should_recreate_swapchain: bool,
 
     render_pass: QuadRenderPass,
-    previous_frame_end: Option<Box<dyn GpuFuture>>,
+
+    fences: Vec<Option<Box<dyn GpuFuture>>>,
+    previous_fence_index: usize,
 }
 
 impl Renderer2D {
@@ -47,14 +49,18 @@ impl Renderer2D {
 
         let render_pass =
             QuadRenderPass::new(device.graphics_queue(), device.swapchain.image_format());
-        let previous_frame_end = Some(sync::now(device.device.clone()).boxed());
+
+        let frames_in_flight = device.swapchain.image_count() as usize;
 
         let r = Renderer2D {
             device,
             background_color: DEFAULT_BACKGROUND_COLOR,
             should_recreate_swapchain: false,
             render_pass,
-            previous_frame_end,
+            fences: std::iter::repeat_with(|| None)
+                .take(frames_in_flight)
+                .collect(),
+            previous_fence_index: 0,
         };
 
         Ok(r)
@@ -80,7 +86,6 @@ impl Renderer2D {
 
     pub fn begin(&mut self) -> Result<Box<dyn GpuFuture>> {
         TIME!("renderer.begin");
-        self.previous_frame_end.as_mut().unwrap().cleanup_finished();
 
         if self.should_recreate_swapchain {
             self.recreate_swapchain_and_views();
@@ -104,9 +109,29 @@ impl Renderer2D {
         // set current swapchain image index
         self.device.image_index = image_i;
 
+        // If this image buffer already has a future then attempt to cleanup fence
+        // resources. Usually the future for this index will have completed by
+        // the time we are rendering it again.
+        if let Some(image_fence) = &mut self.fences[image_i].take() {
+            image_fence.cleanup_finished()
+        }
+
+        // If the previous image has a fence then use it for synchronization, else
+        // create a new one.
+        let future = match self.fences[self.previous_fence_index].take() {
+            // Ensure current frame is synchronized with previous.
+            Some(mut fence) => {
+                // Prevent OutOfMemory error on Nvidia :(
+                // https://github.com/vulkano-rs/vulkano/issues/627
+                fence.cleanup_finished();
+                fence
+            }
+            // Create new future to guarentee synchronization with (fake) previous frame.
+            None => sync::now(self.device.device.clone()).boxed(),
+        };
+
         // join previous frame future with acquire frame future
-        let future = self.previous_frame_end.take().unwrap().join(acquire_future);
-        Ok(future.boxed())
+        Ok(future.join(acquire_future).boxed())
     }
 
     pub fn end(&mut self, after_future: Box<dyn GpuFuture>, vp: Matrix4<f32>) {
@@ -145,29 +170,19 @@ impl Renderer2D {
             )
             .then_signal_fence_and_flush();
 
-        match future {
-            Ok(future) => {
-                // Prevent OutOfMemory error on Nvidia :(
-                // https://github.com/vulkano-rs/vulkano/issues/627
-                //
-                // Adding the following line at the begining of begin() fixes it:
-                //   self.previous_frame_end.as_mut().unwrap().cleanup_finished();
-                //
-                // match future.wait(None) {
-                //     Ok(x) => x,
-                //     Err(err) => error!("{:?}", err),
-                // }
-                self.previous_frame_end = Some(future.boxed());
-            }
+        self.fences[self.device.image_index] = match future {
+            Ok(future) => Some(future.boxed()),
             Err(FlushError::OutOfDate) => {
                 self.should_recreate_swapchain = true;
-                self.previous_frame_end = Some(sync::now(self.device.device.clone()).boxed());
+                Some(sync::now(self.device.device.clone()).boxed())
             }
+
             Err(e) => {
                 error!("failed to flush future: {:?}", e);
-                self.previous_frame_end = Some(sync::now(self.device.device.clone()).boxed());
+                Some(sync::now(self.device.device.clone()).boxed())
             }
-        }
+        };
+        self.previous_fence_index = self.device.image_index;
     }
 
     pub fn draw_quad(&mut self, position: Vector2<f32>, size: Vector2<f32>, color: Vector4<f32>) {
