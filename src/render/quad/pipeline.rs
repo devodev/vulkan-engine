@@ -1,7 +1,7 @@
-use std::{error::Error, fmt::Debug, ops::Mul, result, sync::Arc};
+use std::{error::Error, fmt::Debug, result, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
-use cgmath::{Matrix4, Vector2, Vector3, Vector4};
+use cgmath::{Matrix4, Vector2, Vector4};
 use vulkano::{
     buffer::{BufferUsage, CpuBufferPool, DeviceLocalBuffer, ImmutableBuffer},
     command_buffer::{
@@ -29,28 +29,30 @@ type Result<T> = result::Result<T, Box<dyn Error>>;
 #[repr(C)]
 #[derive(Default, Copy, Clone, Zeroable, Pod)]
 struct QuadVertex {
-    position: [f32; 3],
+    position: [f32; 2],
 }
 vulkano::impl_vertex!(QuadVertex, position);
 
 impl QuadVertex {
-    pub fn new(pos: &[f32; 3]) -> Self {
+    fn new(pos: &[f32; 2]) -> Self {
         QuadVertex { position: *pos }
     }
 }
 
 #[repr(C)]
-#[derive(Default, Copy, Clone, Zeroable, Pod)]
-pub struct QuadVertexInstance {
-    pub offset: [f32; 3],
-    pub color: [f32; 4],
+#[derive(Debug, Default, Copy, Clone, Zeroable, Pod)]
+struct QuadVertexInstance {
+    offset: [f32; 2],
+    scale: [f32; 2],
+    color: [f32; 4],
 }
-vulkano::impl_vertex!(QuadVertexInstance, offset, color);
+vulkano::impl_vertex!(QuadVertexInstance, offset, scale, color);
 
 impl QuadVertexInstance {
-    pub fn new(off: &[f32; 3], col: &[f32; 4]) -> Self {
+    fn new(off: &[f32; 2], scale: &[f32; 2], col: &[f32; 4]) -> Self {
         QuadVertexInstance {
             offset: *off,
+            scale: *scale,
             color: *col,
         }
     }
@@ -65,14 +67,14 @@ impl QuadVertexInstance {
 // 3 +--------------+ 2
 //
 const QUAD_INDICES: [u32; 6] = [0, 1, 2, 2, 3, 0];
-const QUAD_VERTICES: [Vector3<f32>; 4] = [
-    Vector3::new(-0.5, 0.5, 0.0),
-    Vector3::new(0.5, 0.5, 0.0),
-    Vector3::new(0.5, -0.5, 0.0),
-    Vector3::new(-0.5, -0.5, 0.0),
+const QUAD_VERTICES: [Vector2<f32>; 4] = [
+    Vector2::new(-0.5, 0.5),
+    Vector2::new(0.5, 0.5),
+    Vector2::new(0.5, -0.5),
+    Vector2::new(-0.5, -0.5),
 ];
 
-const DEFAULT_MAX_QUADS: usize = 1000;
+const DEFAULT_MAX_QUADS: usize = 10000;
 
 struct QuadBufferData {
     quads_count: usize,
@@ -157,7 +159,7 @@ impl QuadPipeline {
             pipeline,
             max_quads,
             quads_count: 0,
-            vertices: Vec::with_capacity(6),
+            vertices: Vec::with_capacity(QUAD_INDICES.len()),
             instances: Vec::with_capacity(max_quads),
             buffer_data: Vec::new(),
             uniform_buffer: uniform_mvp_buffer,
@@ -173,12 +175,9 @@ impl QuadPipeline {
         }
 
         // add instance data
-        let scale = Matrix4::from_nonuniform_scale(size.x, size.y, 1.0);
         self.instances.push(QuadVertexInstance::new(
-            &scale
-                .mul(Vector4::new(position.x, position.y, 1.0, 1.0))
-                .truncate()
-                .into(),
+            &position.into(),
+            &size.into(),
             &color.into(),
         ));
 
@@ -333,18 +332,19 @@ layout(binding = 0) uniform UniformBufferObject  {
 } ubo;
 
 // inputs (vertex positions)
-layout(location = 0) in vec3 position;
+layout(location = 0) in vec2 position;
 
 // inputs (per-instance data)
-layout(location = 1) in vec3 offset;
-layout(location = 2) in vec4 color;
+layout(location = 1) in vec2 offset;
+layout(location = 2) in vec2 scale;
+layout(location = 3) in vec4 color;
 
 // outputs
 layout(location = 0) out vec4 frag_Color;
 
 void main() {
     frag_Color = color;
-    gl_Position = ubo.mvp * vec4(position + offset, 1.0);
+    gl_Position = ubo.mvp * vec4(position * scale + offset, 0.0, 1.0);
 }"
     }
 }
