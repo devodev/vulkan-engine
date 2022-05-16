@@ -28,16 +28,29 @@ type Result<T> = result::Result<T, Box<dyn Error>>;
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, Zeroable, Pod)]
-pub struct QuadVertex {
-    pub position: [f32; 3],
-    pub color: [f32; 4],
+struct QuadVertex {
+    position: [f32; 3],
 }
-vulkano::impl_vertex!(QuadVertex, position, color);
+vulkano::impl_vertex!(QuadVertex, position);
 
 impl QuadVertex {
-    pub fn new(pos: &[f32; 3], col: &[f32; 4]) -> Self {
-        QuadVertex {
-            position: *pos,
+    pub fn new(pos: &[f32; 3]) -> Self {
+        QuadVertex { position: *pos }
+    }
+}
+
+#[repr(C)]
+#[derive(Default, Copy, Clone, Zeroable, Pod)]
+pub struct QuadVertexInstance {
+    pub offset: [f32; 3],
+    pub color: [f32; 4],
+}
+vulkano::impl_vertex!(QuadVertexInstance, offset, color);
+
+impl QuadVertexInstance {
+    pub fn new(off: &[f32; 3], col: &[f32; 4]) -> Self {
+        QuadVertexInstance {
+            offset: *off,
             color: *col,
         }
     }
@@ -64,7 +77,7 @@ const DEFAULT_MAX_QUADS: usize = 1000;
 struct QuadBufferData {
     quads_count: usize,
     vertex_buffer: Arc<ImmutableBuffer<[QuadVertex]>>,
-    index_buffer: Arc<ImmutableBuffer<[u32]>>,
+    instance_buffer: Arc<ImmutableBuffer<[QuadVertexInstance]>>,
     future: Box<dyn GpuFuture>,
 }
 
@@ -82,7 +95,7 @@ pub struct QuadPipeline {
     max_quads: usize,
     quads_count: usize,
     vertices: Vec<QuadVertex>,
-    indices: Vec<u32>,
+    instances: Vec<QuadVertexInstance>,
     buffer_data: Vec<QuadBufferData>,
     uniform_buffer: Arc<CpuBufferPool<vs::ty::UniformBufferObject>>,
     uniform_buffer_dev: Arc<DeviceLocalBuffer<vs::ty::UniformBufferObject>>,
@@ -102,7 +115,11 @@ impl QuadPipeline {
                 .expect("failed to create fragment shader module");
             // create graphics pipeline
             GraphicsPipeline::start()
-                .vertex_input_state(BuffersDefinition::new().vertex::<QuadVertex>())
+                .vertex_input_state(
+                    BuffersDefinition::new()
+                        .vertex::<QuadVertex>()
+                        .instance::<QuadVertexInstance>(),
+                )
                 .vertex_shader(vs.entry_point("main").unwrap(), ())
                 .input_assembly_state(InputAssemblyState::new())
                 .fragment_shader(fs.entry_point("main").unwrap(), ())
@@ -140,8 +157,8 @@ impl QuadPipeline {
             pipeline,
             max_quads,
             quads_count: 0,
-            vertices: Vec::with_capacity(max_quads * 4),
-            indices: Vec::with_capacity(max_quads * 6),
+            vertices: Vec::with_capacity(6),
+            instances: Vec::with_capacity(max_quads),
             buffer_data: Vec::new(),
             uniform_buffer: uniform_mvp_buffer,
             uniform_buffer_dev: uniform_mvp_buffer_dev,
@@ -155,23 +172,15 @@ impl QuadPipeline {
             self.flush_batch();
         }
 
-        // add indices
-        let offset = self.vertices.len() as u32;
-        self.indices
-            .extend(QUAD_INDICES.into_iter().map(|i| i + offset));
-
-        // add vertices
-        let translation = Matrix4::from_translation(Vector3::new(position.x, position.y, 1.0));
+        // add instance data
         let scale = Matrix4::from_nonuniform_scale(size.x, size.y, 1.0);
-        self.vertices.extend(QUAD_VERTICES.iter().map(|qv| {
-            QuadVertex::new(
-                &scale
-                    .mul(translation.mul(Vector4::new(qv.x, qv.y, qv.z, 1.0)))
-                    .truncate()
-                    .into(),
-                &color.into(),
-            )
-        }));
+        self.instances.push(QuadVertexInstance::new(
+            &scale
+                .mul(Vector4::new(position.x, position.y, 1.0, 1.0))
+                .truncate()
+                .into(),
+            &color.into(),
+        ));
 
         // bump quad count
         self.quads_count += 1;
@@ -228,9 +237,8 @@ impl QuadPipeline {
                 future = Box::new(future.join(data.future));
 
                 builder
-                    .bind_vertex_buffers(0, data.vertex_buffer)
-                    .bind_index_buffer(data.index_buffer)
-                    .draw_indexed((data.quads_count * QUAD_INDICES.len()) as u32, 1, 0, 0, 0)
+                    .bind_vertex_buffers(0, (data.vertex_buffer, data.instance_buffer))
+                    .draw(QUAD_INDICES.len() as u32, data.quads_count as u32, 0, 0)
                     .unwrap();
             }
         }
@@ -268,14 +276,16 @@ impl QuadPipeline {
 
         // create vertex and index buffer from quad renderer
         let (vertex_buffer, vb_future) = ImmutableBuffer::from_iter(
-            self.vertices.clone(),
+            QUAD_INDICES
+                .into_iter()
+                .map(|idx| QuadVertex::new(&QUAD_VERTICES[idx as usize].into())),
             BufferUsage::vertex_buffer_transfer_dst(),
             self.gfx_queue.clone(),
         )
         .unwrap();
-        let (index_buffer, ib_future) = ImmutableBuffer::from_iter(
-            self.indices.clone(),
-            BufferUsage::index_buffer_transfer_dst(),
+        let (instance_buffer, ib_future) = ImmutableBuffer::from_iter(
+            self.instances.clone(),
+            BufferUsage::vertex_buffer_transfer_dst(),
             self.gfx_queue.clone(),
         )
         .unwrap();
@@ -293,7 +303,7 @@ impl QuadPipeline {
         self.buffer_data.push(QuadBufferData {
             quads_count,
             vertex_buffer,
-            index_buffer,
+            instance_buffer,
             future,
         })
     }
@@ -301,7 +311,7 @@ impl QuadPipeline {
     fn reset_batch(&mut self) {
         self.quads_count = 0;
         self.vertices.clear();
-        self.indices.clear();
+        self.instances.clear();
     }
 }
 
@@ -322,16 +332,19 @@ layout(binding = 0) uniform UniformBufferObject  {
     mat4 mvp;
 } ubo;
 
-// inputs
+// inputs (vertex positions)
 layout(location = 0) in vec3 position;
-layout(location = 1) in vec4 color;
+
+// inputs (per-instance data)
+layout(location = 1) in vec3 offset;
+layout(location = 2) in vec4 color;
 
 // outputs
 layout(location = 0) out vec4 frag_Color;
 
 void main() {
     frag_Color = color;
-    gl_Position = ubo.mvp * vec4(position, 1.0);
+    gl_Position = ubo.mvp * vec4(position + offset, 1.0);
 }"
     }
 }
