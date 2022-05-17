@@ -25,6 +25,8 @@ pub struct CameraController {
     zoom_min: f32,
     zoom_max: f32,
     zoom_sensitivity: f32,
+    zoom_speed: f32,
+    zoom_deadzone: f32,
 }
 
 impl CameraController {
@@ -37,9 +39,11 @@ impl CameraController {
             camera,
             view: Matrix4::identity(),
             zoom_target: camera.zoom(),
-            zoom_min: 0.1,
-            zoom_max: 5.0,
-            zoom_sensitivity: 0.08,
+            zoom_min: 0.01,
+            zoom_max: 10.0,
+            zoom_sensitivity: 0.1,
+            zoom_speed: 10.0,
+            zoom_deadzone: 0.1,
         };
         controller.compute_view_matrix();
         controller
@@ -50,26 +54,39 @@ impl CameraController {
 
         let speed = self.speed_base * delta.as_secs_f32();
 
+        // adapt movement speed based on zoom level
+        let current_zoom = self.camera.zoom();
+        let zoom_magnitute = self.zoom_max - self.zoom_min;
+        let zoom_level = current_zoom / zoom_magnitute;
+
+        let speed_buf_min = 0.01;
+        let speed_buf_max = 0.8;
+        let speed_modifier_scale = 50.0;
+        let speed_modifier =
+            speed_buf_min + zoom_level * (speed_buf_max - speed_buf_min) * speed_modifier_scale;
+
+        let movement_speed = speed * speed_modifier;
+
         // move camera => Z
         if ctx.is_key_pressed(VirtualKeyCode::Q) {
-            self.move_backward(speed)
+            self.move_backward(movement_speed)
         }
         if ctx.is_key_pressed(VirtualKeyCode::E) {
-            self.move_forward(speed)
+            self.move_forward(movement_speed)
         }
         // move camera => Y
         if ctx.is_key_pressed(VirtualKeyCode::W) {
-            self.move_up(speed)
+            self.move_up(movement_speed)
         }
         if ctx.is_key_pressed(VirtualKeyCode::S) {
-            self.move_down(speed)
+            self.move_down(movement_speed)
         }
         // move camera => X
         if ctx.is_key_pressed(VirtualKeyCode::A) {
-            self.move_left(speed)
+            self.move_left(movement_speed)
         }
         if ctx.is_key_pressed(VirtualKeyCode::D) {
-            self.move_right(speed)
+            self.move_right(movement_speed)
         }
 
         // on scroll, update zoom_target
@@ -79,8 +96,12 @@ impl CameraController {
         self.zoom_target = clamp(self.zoom_target, self.zoom_min, self.zoom_max);
 
         // move camera (lerp) towards zoom_target
-        if (self.camera.zoom() - self.zoom_target).abs() > 0.1 {
-            let zoom_amount = lerp(self.camera.zoom(), self.zoom_target, speed * 3.0);
+        if (self.camera.zoom() - self.zoom_target).abs() > self.zoom_deadzone / 2.0 {
+            let zoom_amount = lerp(
+                self.camera.zoom(),
+                self.zoom_target,
+                speed * self.zoom_speed,
+            );
             self.camera.set_zoom(zoom_amount);
         }
 
