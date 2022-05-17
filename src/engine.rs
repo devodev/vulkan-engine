@@ -152,7 +152,7 @@ impl Engine {
         let mut app = self.app.take().ok_or("Couldnt take app")?;
 
         // gameloop state
-        let tps = 20;
+        let tps = 120;
         let max_frameskip = 5;
         let game_loop = GameLoop::new(tps, max_frameskip)?;
 
