@@ -142,22 +142,6 @@ fn clamp(v: f32, min: f32, max: f32) -> f32 {
     }
 }
 
-// fn lerp(start: f32, end: f32, amount: f32) -> f32 {
-//     start * (1.0 - amount) + end * amount
-// }
-
 fn lerp(start: f32, end: f32, amount: f32) -> f32 {
     start + (end - start) * amount
-}
-
-fn ease_in(amount: f32) -> f32 {
-    amount * amount
-}
-
-fn flip(amount: f32) -> f32 {
-    1.0 - amount
-}
-
-fn smoothstep(amount: f32) -> f32 {
-    amount * amount * (3.0 - 2.0 * amount)
 }
