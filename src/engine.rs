@@ -192,11 +192,10 @@ impl Engine {
                                 TIME!("gameloop::FrameAction::Tick");
                                 // update state
                                 app.on_update(Context::new(delta_time, &mut renderer, &input));
-                                camera_controller.on_update(Context::new(
+                                camera_controller.on_update(
+                                    Context::new(delta_time, &mut renderer, &input),
                                     delta_time,
-                                    &mut renderer,
-                                    &input,
-                                ));
+                                );
                             }
                             gameloop::FrameAction::Render { interpolation: _ } => {
                                 TIME!("gameloop::FrameAction::Render");
@@ -210,6 +209,7 @@ impl Engine {
                             }
                         }
                     }
+                    input.reset();
                 }
                 _ => {}
             }
@@ -272,6 +272,14 @@ impl<'a> Context<'a> {
 
     pub fn is_key_released(&self, key: VirtualKeyCode) -> bool {
         self.input.is_key_released(key)
+    }
+
+    pub fn mouse_scoll_x(&self) -> f32 {
+        self.input.mouse_scoll_x()
+    }
+
+    pub fn mouse_scoll_y(&self) -> f32 {
+        self.input.mouse_scoll_y()
     }
 }
 
