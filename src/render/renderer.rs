@@ -17,9 +17,10 @@ use crate::TIME;
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
-const DEFAULT_BACKGROUND_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
+const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
 // Vulkan clip space has inverted Y and half Z.
+// https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
 #[rustfmt::skip]
 const VULKAN_COORD_MAGIC_PROJ: Matrix4<f32> = Matrix4::new(
     1.0, 0.0, 0.0, 0.0,
@@ -54,7 +55,7 @@ impl Renderer2D {
 
         let r = Renderer2D {
             device,
-            background_color: DEFAULT_BACKGROUND_COLOR,
+            background_color: BLACK,
             should_recreate_swapchain: false,
             render_pass,
             fences: std::iter::repeat_with(|| None)

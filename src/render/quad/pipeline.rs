@@ -10,6 +10,8 @@ use vulkano::{
     },
     descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet},
     device::Queue,
+    format::Format,
+    image::{view::ImageView, ImageDimensions, ImmutableImage, MipmapsCount},
     pipeline::{
         graphics::{
             input_assembly::InputAssemblyState,
@@ -19,6 +21,7 @@ use vulkano::{
         GraphicsPipeline, Pipeline,
     },
     render_pass::Subpass,
+    sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo},
     sync::{self, GpuFuture},
 };
 
@@ -26,16 +29,22 @@ use crate::TIME;
 
 type Result<T> = result::Result<T, Box<dyn Error>>;
 
+const WHITE: [u8; 4] = [255, 255, 255, 255];
+
 #[repr(C)]
 #[derive(Default, Copy, Clone, Zeroable, Pod)]
 struct QuadVertex {
     position: [f32; 2],
+    tex_coords: [f32; 2],
 }
-vulkano::impl_vertex!(QuadVertex, position);
+vulkano::impl_vertex!(QuadVertex, position, tex_coords);
 
 impl QuadVertex {
-    fn new(pos: &[f32; 2]) -> Self {
-        QuadVertex { position: *pos }
+    fn new(pos: &[f32; 2], tex_coords: &[f32; 2]) -> Self {
+        QuadVertex {
+            position: *pos,
+            tex_coords: *tex_coords,
+        }
     }
 }
 
@@ -72,6 +81,12 @@ const QUAD_VERTICES: [Vector2<f32>; 4] = [
     Vector2::new(0.5, 0.5),
     Vector2::new(0.5, -0.5),
     Vector2::new(-0.5, -0.5),
+];
+const QUAD_TEX_COORDS: [Vector2<f32>; 4] = [
+    Vector2::new(0.0, 0.0),
+    Vector2::new(1.0, 0.0),
+    Vector2::new(0.0, 1.0),
+    Vector2::new(1.0, 1.0),
 ];
 
 const DEFAULT_MAX_QUADS: usize = 10000;
@@ -131,6 +146,37 @@ impl QuadPipeline {
                 .unwrap()
         };
 
+        // create white texture
+        let (white_texture, white_texture_future) = {
+            let dimensions = ImageDimensions::Dim2d {
+                width: 1,
+                height: 1,
+                array_layers: 1,
+            };
+            let image_data = (0..dimensions.width() * dimensions.height() * 4).map(|_| WHITE);
+            let (image, future) = ImmutableImage::from_iter(
+                image_data,
+                dimensions,
+                MipmapsCount::One,
+                Format::R8G8B8A8_SRGB,
+                gfx_queue.clone(),
+            )
+            .expect("create white texture immutable buffer");
+            (ImageView::new_default(image).unwrap(), future)
+        };
+        white_texture_future.flush().expect("white texture flush");
+
+        let sampler = Sampler::new(
+            gfx_queue.device().clone(),
+            SamplerCreateInfo {
+                mag_filter: Filter::Linear,
+                min_filter: Filter::Linear,
+                address_mode: [SamplerAddressMode::Repeat; 3],
+                ..Default::default()
+            },
+        )
+        .expect("create sampler");
+
         // create cpu and gpu buffers (we will copy data between them each frame)
         let uniform_mvp_buffer = Arc::new(CpuBufferPool::<vs::ty::UniformBufferObject>::new(
             gfx_queue.device().clone(),
@@ -147,10 +193,10 @@ impl QuadPipeline {
         let layout = pipeline.layout().set_layouts().get(0).unwrap();
         let uniform_mvp_ds = PersistentDescriptorSet::new(
             layout.clone(),
-            [WriteDescriptorSet::buffer(
-                0,
-                uniform_mvp_buffer_dev.clone(),
-            )],
+            [
+                WriteDescriptorSet::buffer(0, uniform_mvp_buffer_dev.clone()),
+                WriteDescriptorSet::image_view_sampler(1, white_texture, sampler),
+            ],
         )
         .expect("create descriptor set for mvp uniform buffer");
 
@@ -275,9 +321,12 @@ impl QuadPipeline {
 
         // create vertex and index buffer from quad renderer
         let (vertex_buffer, vb_future) = ImmutableBuffer::from_iter(
-            QUAD_INDICES
-                .into_iter()
-                .map(|idx| QuadVertex::new(&QUAD_VERTICES[idx as usize].into())),
+            QUAD_INDICES.into_iter().map(|idx| {
+                QuadVertex::new(
+                    &QUAD_VERTICES[idx as usize].into(),
+                    &QUAD_TEX_COORDS[idx as usize].into(),
+                )
+            }),
             BufferUsage::vertex_buffer_transfer_dst(),
             self.gfx_queue.clone(),
         )
@@ -327,23 +376,26 @@ pub mod vs {
 #version 450
 
 // uniforms
-layout(binding = 0) uniform UniformBufferObject  {
+layout(binding = 0) uniform UniformBufferObject {
     mat4 mvp;
 } ubo;
 
 // inputs (vertex positions)
 layout(location = 0) in vec2 position;
+layout(location = 1) in vec2 tex_coords;
 
 // inputs (per-instance data)
-layout(location = 1) in vec2 offset;
-layout(location = 2) in vec2 scale;
-layout(location = 3) in vec4 color;
+layout(location = 2) in vec2 offset;
+layout(location = 3) in vec2 scale;
+layout(location = 4) in vec4 color;
 
 // outputs
-layout(location = 0) out vec4 frag_Color;
+layout(location = 0) out vec2 f_tex_coords;
+layout(location = 1) out vec4 f_frag_color;
 
 void main() {
-    frag_Color = color;
+    f_tex_coords = tex_coords;
+    f_frag_color = color;
     gl_Position = ubo.mvp * vec4(position * scale + offset, 0.0, 1.0);
 }"
     }
@@ -356,14 +408,20 @@ pub mod fs {
         src: "
 #version 450
 
+// uniforms
+layout(binding = 1) uniform sampler2D white_tex;
+
 // inputs
-layout(location = 0) in vec4 frag_Color;
+layout(location = 0) in vec2 tex_coords;
+layout(location = 1) in vec4 frag_color;
 
 // outputs
-layout(location = 0) out vec4 f_color;
+layout(location = 0) out vec4 color;
 
 void main() {
-    f_color = frag_Color;
+    // color = frag_color;
+    // color = vec4(tex_coords, 0.0, 1.0);
+    color = texture(white_tex, tex_coords) * frag_color;
 }"
     }
 }
