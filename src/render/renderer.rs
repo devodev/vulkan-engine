@@ -162,6 +162,8 @@ impl Renderer2D {
         );
 
         // present swapchain image
+        // TODO: this statement generates a stack overflow error when trying to render
+        //       1M quads: thread 'main' has overflowed its stack
         let future = render_future
             .then_swapchain_present(
                 self.device.graphics_queue(),

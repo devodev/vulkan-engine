@@ -190,14 +190,14 @@ impl Engine {
                         match action {
                             gameloop::FrameAction::Tick => {
                                 TIME!("gameloop::FrameAction::Tick");
-                                // update state
+
                                 app.on_update(Context::new(delta_time, &mut renderer, &input));
                                 camera_controller.on_update(
                                     Context::new(delta_time, &mut renderer, &input),
                                     delta_time,
                                 );
                             }
-                            gameloop::FrameAction::Render { interpolation: _ } => {
+                            gameloop::FrameAction::Render { .. } => {
                                 TIME!("gameloop::FrameAction::Render");
 
                                 let after_future = renderer.begin().unwrap();

@@ -36,6 +36,7 @@ fn main() {
     // engine takes ownership of thread and will call std::process::exit for us
     EngineBuilder::new(Box::new(app))
         .with_window_size(Size::Logical(LogicalSize::new(1024.0, 768.0)))
+        .with_window_resizable(false)
         .with_window_title("Sandbox (Vulkan Engine)".to_owned())
         .with_window_icon(icon)
         .with_renderer_debug(enable_renderer_debug)
