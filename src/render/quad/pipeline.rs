@@ -178,11 +178,11 @@ impl QuadPipeline {
         .expect("create sampler");
 
         // create cpu and gpu buffers (we will copy data between them each frame)
-        let uniform_mvp_buffer = Arc::new(CpuBufferPool::<vs::ty::UniformBufferObject>::new(
+        let uniform_buffer = Arc::new(CpuBufferPool::<vs::ty::UniformBufferObject>::new(
             gfx_queue.device().clone(),
             BufferUsage::transfer_src(),
         ));
-        let uniform_mvp_buffer_dev = DeviceLocalBuffer::<vs::ty::UniformBufferObject>::new(
+        let uniform_buffer_dev = DeviceLocalBuffer::<vs::ty::UniformBufferObject>::new(
             gfx_queue.device().clone(),
             BufferUsage::uniform_buffer_transfer_dst(),
             [gfx_queue.family()],
@@ -194,7 +194,7 @@ impl QuadPipeline {
         let uniform_mvp_ds = PersistentDescriptorSet::new(
             layout.clone(),
             [
-                WriteDescriptorSet::buffer(0, uniform_mvp_buffer_dev.clone()),
+                WriteDescriptorSet::buffer(0, uniform_buffer_dev.clone()),
                 WriteDescriptorSet::image_view_sampler(1, white_texture, sampler),
             ],
         )
@@ -208,8 +208,8 @@ impl QuadPipeline {
             vertices: Vec::with_capacity(QUAD_INDICES.len()),
             instances: Vec::with_capacity(max_quads),
             buffer_data: Vec::new(),
-            uniform_buffer: uniform_mvp_buffer,
-            uniform_buffer_dev: uniform_mvp_buffer_dev,
+            uniform_buffer,
+            uniform_buffer_dev,
             uniform_mvp_ds,
         }
     }
