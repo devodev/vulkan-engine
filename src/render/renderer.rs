@@ -88,7 +88,7 @@ impl Renderer2D {
         self.should_recreate_swapchain = true;
     }
 
-    pub fn begin(&mut self) -> Result<Box<dyn GpuFuture>> {
+    pub fn begin_frame(&mut self) -> Result<()> {
         TIME!("renderer.begin");
 
         if self.should_recreate_swapchain {
@@ -139,7 +139,7 @@ impl Renderer2D {
         Ok(())
     }
 
-    pub fn end(&mut self, after_future: Box<dyn GpuFuture>, vp: Matrix4<f32>) {
+    pub fn end_frame(&mut self, vp: Matrix4<f32>) {
         TIME!("renderer.end");
         let frame_future = self
             .frame_future

@@ -200,12 +200,11 @@ impl Engine {
                             gameloop::FrameAction::Render { .. } => {
                                 TIME!("gameloop::FrameAction::Render");
 
-                                let after_future = renderer.begin().unwrap();
+                                renderer.begin_frame().unwrap();
 
                                 app.on_render(Context::new(delta_time, &mut renderer, &input));
 
-                                renderer
-                                    .end(after_future, camera_controller.view_projection_matrix());
+                                renderer.end_frame(camera_controller.view_projection_matrix());
                             }
                         }
                     }
