@@ -166,7 +166,7 @@ impl QuadPipeline {
         };
         white_texture_future.flush().expect("white texture flush");
 
-        let sampler = Sampler::new(
+        let white_sampler = Sampler::new(
             gfx_queue.device().clone(),
             SamplerCreateInfo {
                 mag_filter: Filter::Linear,
@@ -195,7 +195,7 @@ impl QuadPipeline {
             layout.clone(),
             [
                 WriteDescriptorSet::buffer(0, uniform_buffer_dev.clone()),
-                WriteDescriptorSet::image_view_sampler(1, white_texture, sampler),
+                WriteDescriptorSet::image_view_sampler(1, white_texture, white_sampler),
             ],
         )
         .expect("create descriptor set for mvp uniform buffer");
