@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use cgmath::{Deg, Matrix4, SquareMatrix};
 
 #[derive(Debug, Copy, Clone)]
