@@ -40,6 +40,8 @@ pub struct Renderer2D {
 
     render_pass: QuadRenderPass,
 
+    frame_future: Option<Box<dyn GpuFuture>>,
+
     fences: Vec<Option<Box<dyn GpuFuture>>>,
     previous_fence_index: usize,
 }
@@ -58,6 +60,7 @@ impl Renderer2D {
             background_color: BLACK,
             should_recreate_swapchain: false,
             render_pass,
+            frame_future: None,
             fences: std::iter::repeat_with(|| None)
                 .take(frames_in_flight)
                 .collect(),
@@ -131,12 +134,17 @@ impl Renderer2D {
             None => sync::now(self.device.device.clone()).boxed(),
         };
 
-        // join previous frame future with acquire frame future
-        Ok(future.join(acquire_future).boxed())
+        self.frame_future = Some(future.join(acquire_future).boxed());
+
+        Ok(())
     }
 
     pub fn end(&mut self, after_future: Box<dyn GpuFuture>, vp: Matrix4<f32>) {
         TIME!("renderer.end");
+        let frame_future = self
+            .frame_future
+            .take()
+            .expect("frame future should not be none in renderer.end()");
         let model = Matrix4::identity();
         let mvp = model.mul(vp);
         // Pre-multiply mvp matrix with this magix matrix
@@ -156,7 +164,7 @@ impl Renderer2D {
 
         // submit graphics quads render pass (submit command buffer)
         let render_future = self.render_pass.render(
-            after_future,
+            frame_future,
             self.device.image_view(),
             self.background_color,
             mvp,
