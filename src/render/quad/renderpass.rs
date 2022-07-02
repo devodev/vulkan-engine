@@ -67,15 +67,16 @@ impl QuadRenderPass {
         mvp: Matrix4<f32>,
     ) -> Box<dyn GpuFuture> {
         TIME!("renderpass.render");
+
         // create command buffer for copying uniform data
         let uniforms_cb = self
             .pipeline
             .copy_uniforms(mvp)
             .expect("create uniform command buffer");
 
-        // create command buffer for render pass
+        // record render commands into command buffer
         let (renderpass_cb, renderpass_future) =
-            self.gen_command_buffer(image_view, clear_value).unwrap();
+            self.record_command_buffer(image_view, clear_value).unwrap();
 
         // Execute command buffers
         let after_future = before_future
@@ -92,7 +93,7 @@ impl QuadRenderPass {
         self.pipeline.add_quad(position, size, color)
     }
 
-    fn gen_command_buffer(
+    fn record_command_buffer(
         &mut self,
         image_view: Arc<dyn ImageViewAbstract>,
         clear_value: [f32; 4],
