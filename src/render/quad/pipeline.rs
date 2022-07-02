@@ -5,8 +5,8 @@ use cgmath::{Matrix4, Vector2, Vector4};
 use vulkano::{
     buffer::{BufferUsage, CpuBufferPool, DeviceLocalBuffer, ImmutableBuffer},
     command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo, PrimaryAutoCommandBuffer,
-        SecondaryAutoCommandBuffer,
+        AutoCommandBufferBuilder, CommandBufferExecFuture, CommandBufferUsage, CopyBufferInfo,
+        PrimaryAutoCommandBuffer, SecondaryAutoCommandBuffer,
     },
     descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet},
     device::Queue,
@@ -21,8 +21,8 @@ use vulkano::{
         GraphicsPipeline, Pipeline,
     },
     render_pass::Subpass,
-    sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo},
-    sync::{self, GpuFuture},
+    sampler::{Sampler, SamplerCreateInfo},
+    sync::{self, GpuFuture, NowFuture},
 };
 
 use crate::TIME;
@@ -91,6 +91,7 @@ const QUAD_TEX_COORDS: [Vector2<f32>; 4] = [
 
 const DEFAULT_MAX_QUADS: usize = 10000;
 
+/// contains a batch of quads data that can be used in a single draw call.
 struct QuadBufferData {
     quads_count: usize,
     vertex_buffer: Arc<ImmutableBuffer<[QuadVertex]>>,
@@ -116,7 +117,7 @@ pub struct QuadPipeline {
     buffer_data: Vec<QuadBufferData>,
     uniform_buffer: Arc<CpuBufferPool<vs::ty::UniformBufferObject>>,
     uniform_buffer_dev: Arc<DeviceLocalBuffer<vs::ty::UniformBufferObject>>,
-    uniform_mvp_ds: Arc<PersistentDescriptorSet>,
+    uniform_descriptor_set: Arc<PersistentDescriptorSet>,
 }
 
 impl QuadPipeline {
@@ -146,12 +147,28 @@ impl QuadPipeline {
                 .unwrap()
         };
 
+        // TODO: textures
+        //
+        // 1. load image from file
+        // 2. upload image data to GPU
+        // 3. create sampler
+        // 4. write sampler and texture to descriptor set
+
         // create white texture
         let (white_texture, white_texture_future) = {
             let dimensions = ImageDimensions::Dim2d {
                 width: 1,
                 height: 1,
-                array_layers: 1,
+                // set `array_layers: 2` even if we only have one so that we can
+                // use sampler2DArray in the shader.
+                //
+                // TODO: using a sampler2DArray requires that all textures
+                //       be of the SAME SIZE!
+                //
+                // Explanation: ImageView::new_default(image) calls
+                // ImageViewCreateInfo::from_image(&image) and from_image() chooses
+                // a viewType Dim2dArray only if array-laters > 1
+                array_layers: 2,
             };
             let image_data = (0..dimensions.width() * dimensions.height() * 4).map(|_| WHITE);
             let (image, future) = ImmutableImage::from_iter(
@@ -162,18 +179,16 @@ impl QuadPipeline {
                 gfx_queue.clone(),
             )
             .expect("create white texture immutable buffer");
-            (ImageView::new_default(image).unwrap(), future)
+
+            let image_view = ImageView::new_default(image).unwrap();
+
+            (image_view, future)
         };
         white_texture_future.flush().expect("white texture flush");
 
         let white_sampler = Sampler::new(
             gfx_queue.device().clone(),
-            SamplerCreateInfo {
-                mag_filter: Filter::Linear,
-                min_filter: Filter::Linear,
-                address_mode: [SamplerAddressMode::Repeat; 3],
-                ..Default::default()
-            },
+            SamplerCreateInfo::simple_repeat_linear(),
         )
         .expect("create sampler");
 
@@ -191,7 +206,7 @@ impl QuadPipeline {
 
         // create descriptor set
         let layout = pipeline.layout().set_layouts().get(0).unwrap();
-        let uniform_mvp_ds = PersistentDescriptorSet::new(
+        let uniform_descriptor_set = PersistentDescriptorSet::new(
             layout.clone(),
             [
                 WriteDescriptorSet::buffer(0, uniform_buffer_dev.clone()),
@@ -210,7 +225,7 @@ impl QuadPipeline {
             buffer_data: Vec::new(),
             uniform_buffer,
             uniform_buffer_dev,
-            uniform_mvp_ds,
+            uniform_descriptor_set,
         }
     }
 
@@ -236,6 +251,7 @@ impl QuadPipeline {
         viewport_dimensions: [u32; 2],
     ) -> Option<(SecondaryAutoCommandBuffer, Box<dyn GpuFuture>)> {
         TIME!("pipeline.draw");
+
         // flush remaining quads
         self.flush_batch();
 
@@ -261,6 +277,12 @@ impl QuadPipeline {
             }],
         );
 
+        // create initial future used to chain buffer data futures
+        //
+        // TODO: maybe we could store a `previous_future` on the pipeline
+        //       used to store a future of all the init data. It could
+        //       then be retrieved so that we dont need to call
+        //       future.flush() in new()?
         let mut future = sync::now(self.gfx_queue.device().clone()).boxed();
 
         // record draw commands on the secondary command buffer
@@ -273,7 +295,7 @@ impl QuadPipeline {
                 vulkano::pipeline::PipelineBindPoint::Graphics,
                 self.pipeline.layout().clone(),
                 0,
-                self.uniform_mvp_ds.clone(),
+                self.uniform_descriptor_set.clone(),
             );
 
             // record draw commands
@@ -409,7 +431,7 @@ pub mod fs {
 #version 450
 
 // uniforms
-layout(binding = 1) uniform sampler2D white_tex;
+layout(binding = 1) uniform sampler2DArray tex;
 
 // inputs
 layout(location = 0) in vec2 tex_coords;
@@ -421,7 +443,8 @@ layout(location = 0) out vec4 color;
 void main() {
     // color = frag_color;
     // color = vec4(tex_coords, 0.0, 1.0);
-    color = texture(white_tex, tex_coords) * frag_color;
+    // color = texture(white_tex[0], tex_coords) * frag_color;
+    color = texture(tex, vec3(tex_coords, 0)) * frag_color;
 }"
     }
 }
