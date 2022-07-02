@@ -121,8 +121,12 @@ impl Device {
 
     pub fn recreate_swapchain_and_views(&mut self) -> Result<()> {
         // recreate swapchain
+        let image_extent = self.surface.window().inner_size();
+        if image_extent.width == 0 || image_extent.height == 0 {
+            return Ok(());
+        }
         let (new_swapchain, new_images) = match self.swapchain.recreate(SwapchainCreateInfo {
-            image_extent: self.surface.window().inner_size().into(),
+            image_extent: image_extent.into(),
             ..self.swapchain.create_info()
         }) {
             Ok(r) => r,

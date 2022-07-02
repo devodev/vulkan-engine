@@ -200,7 +200,10 @@ impl Engine {
                             gameloop::FrameAction::Render { .. } => {
                                 TIME!("gameloop::FrameAction::Render");
 
-                                renderer.begin_frame().unwrap();
+                                if let Err(e) = renderer.begin_frame() {
+                                    debug!("could not begin frame: {:?}", e);
+                                    return;
+                                }
 
                                 app.on_render(Context::new(delta_time, &mut renderer, &input));
 
