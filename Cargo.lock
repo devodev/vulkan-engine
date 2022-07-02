@@ -1396,6 +1396,7 @@ dependencies = [
  "gameloop",
  "image",
  "log",
+ "png",
  "vulkano",
  "vulkano-shaders",
  "vulkano-win",

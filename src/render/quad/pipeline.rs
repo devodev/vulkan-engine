@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Debug, result, sync::Arc};
+use std::{error::Error, fmt::Debug, io::Cursor, result, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
 use cgmath::{Matrix4, Vector2, Vector4};
@@ -383,6 +383,50 @@ impl QuadPipeline {
         self.vertices.clear();
         self.instances.clear();
     }
+
+    #[allow(dead_code)]
+    #[allow(clippy::type_complexity)]
+    fn upload_texture(
+        &self,
+        image_data: Vec<u8>,
+        dimensions: ImageDimensions,
+    ) -> Result<(
+        Arc<ImageView<ImmutableImage>>,
+        CommandBufferExecFuture<NowFuture, PrimaryAutoCommandBuffer>,
+    )> {
+        let (image, future) = ImmutableImage::from_iter(
+            image_data,
+            dimensions,
+            MipmapsCount::One,
+            Format::R8G8B8A8_SRGB,
+            self.gfx_queue.clone(),
+        )?;
+        let texture = ImageView::new_default(image)?;
+
+        Ok((texture, future))
+    }
+}
+
+#[allow(dead_code)]
+fn load_image_png(img_bytes: Vec<u8>) -> Result<(Vec<u8>, ImageDimensions)> {
+    let cursor = Cursor::new(img_bytes);
+    let decoder = png::Decoder::new(cursor);
+    let mut reader = decoder.read_info()?;
+
+    // TODO: use info to extract ColorType and BitDepth
+    //       and determine the texture Format
+    let info = reader.info();
+    let dimensions = ImageDimensions::Dim2d {
+        width: info.width,
+        height: info.height,
+        array_layers: 1,
+    };
+
+    let mut image_data = Vec::new();
+    image_data.resize((dimensions.width() * dimensions.height() * 4) as usize, 0);
+    reader.next_frame(&mut image_data)?;
+
+    Ok((image_data, dimensions))
 }
 
 #[allow(clippy::needless_question_mark)]
